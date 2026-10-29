@@ -99,7 +99,8 @@ def test_fixing_a_correct_document_changes_nothing():
 def test_messy_document_end_to_end():
     result = fix(build_messy_project())
     assert result.before["score"] < 50
-    assert result.after.report["score"] >= 90
+    assert result.after.report["score"] >= result.before["score"] + 30
+    assert result.after.report["score"] <= 84  # the abstract is still too long: must-fix
     left = rules_of(result.after)
     # What remains is only what the writer must do themselves.
     assert left <= {"references.citation_missing", "references.uncited", "limits.abstract",
@@ -158,4 +159,4 @@ def test_documents_written_by_libreoffice(tmp_path):
         else:
             fixed = fix(converted)
             assert not any(i.fixable for i in fixed.after.issues)
-            assert fixed.after.report["score"] >= 90
+            assert fixed.after.report["score"] >= fixed.before["score"] + 30

@@ -26,6 +26,10 @@ def score(ctx: Context) -> int:
         if n:
             lost += w * min(1.0, 0.4 + 0.6 * n / max(checked, 1))
     value = 100 if total == 0 else max(0, round(100 * (1 - lost / total)))
+    if any(i.severity == "error" for i in log.issues):
+        # Must-fix problems keep the score below the "good" range (85+), while
+        # fewer problems still score higher, so progress between versions shows.
+        return min(84, round(value * 0.85))
     return min(value, 99) if by_rule else value  # 100 only when nothing needs attention
 
 

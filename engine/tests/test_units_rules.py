@@ -113,3 +113,13 @@ def test_long_numbered_heading_is_a_heading():
     result = check(buf.getvalue())
     levels = {info.text: info.level for info in result.context.outline.headings.values()}
     assert levels.get(long_title) == 3
+
+
+def test_must_fix_problems_keep_the_score_out_of_the_good_range():
+    from formatly_engine import check
+    from samples import build_standard_project
+
+    one_problem = check(build_standard_project(missing_scope=True)).report
+    assert one_problem["counts"]["errors"] == 1 and one_problem["score"] <= 84
+    only_suggestion = check(build_standard_project(old_reference=True)).report
+    assert only_suggestion["score"] == 100  # suggestions do not cost points

@@ -13,11 +13,19 @@ The full product plan is in [PLAN.md](PLAN.md).
 
 | Part | Status |
 | --- | --- |
-| [`engine/`](engine/): checking, comments, auto-fix | Phase 1, working |
-| `server/`: accounts, uploads, payments, AI | Phase 2 |
-| `app/`: web, Android, desktop | Phase 2 onwards |
+| [`engine/`](engine/): checking, comments, auto-fix, learning rules from a model document | Working |
+| [`server/`](server/): accounts, uploads, rulebooks and library, versions, credits, AI guideline reading | Working (payments: Phase 3) |
+| [`app/`](app/): the website | Working (Android and desktop: Phase 5) |
 
-## Quick start
+## Run it locally
+
+```sh
+pip install -e "engine[dev]" -e "server[dev]"
+formatly-server                     # the API on :8000
+cd app && npm install && npm run dev  # the website on :5173
+```
+
+## Try the engine on its own
 
 ```sh
 cd engine

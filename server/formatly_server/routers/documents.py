@@ -209,6 +209,7 @@ def autofix(version_id: str, user: models.User = Depends(current_user), session:
         raise HTTPException(409, "This version could not be checked, so it cannot be auto-fixed.")
     if not v.counts.get("fixable"):
         raise HTTPException(409, "Nothing in this version can be fixed automatically.")
+    session.refresh(user, with_for_update=True)  # two taps at once must not both spend the same credit
     if not charge(session, user, settings.fix_cost, "Auto-fix", v.id):
         raise HTTPException(402, "You have no auto-fix credits left. Buy credits to continue.")
     session.flush()

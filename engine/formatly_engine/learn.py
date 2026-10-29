@@ -27,6 +27,8 @@ from .units import TWIPS_PER_CM, TWIPS_PER_INCH, emu_to_twips
 
 PAPER = {"A4": (11906, 16838), "Letter": (12240, 15840), "Legal": (12240, 20160), "A5": (8391, 11906)}
 MIN_SHARE = 0.6  # a value must cover this share of the document to become a rule
+ALIGN_WORDS = {"justify": "justified", "left": "left-aligned", "center": "centred", "right": "right-aligned"}
+NUMBER_WORDS = {"lower_roman": "i, ii, iii", "upper_roman": "I, II, III", "decimal": "1, 2, 3"}
 
 
 @dataclass
@@ -111,7 +113,7 @@ def learn_rulebook(source: bytes, base: str = "default", name: str = "Learned fr
     decide("Body font size", sizes, lambda v: body.__setitem__("size", v), lambda v: f"{v:g} pt")
     decide("Body line spacing", spacing, lambda v: body.__setitem__("line_spacing", v),
            lambda v: {1.0: "single", 1.5: "1.5", 2.0: "double"}.get(v, str(v)))
-    decide("Body alignment", align, lambda v: body.__setitem__("alignment", v))
+    decide("Body alignment", align, lambda v: body.__setitem__("alignment", v), lambda v: ALIGN_WORDS.get(v, v))
     decide("First-line indent", indent, lambda v: body.__setitem__("first_line_indent", v))
 
     # Headings, per level.
@@ -144,7 +146,7 @@ def learn_rulebook(source: bytes, base: str = "default", name: str = "Learned fr
         if value and share >= MIN_SHARE:
             # Left and justified look the same on a one-line heading: accept both.
             h["alignment"] = ["left", "justify"] if value in ("left", "justify") else value
-            out.notes.append(f"Level {level} headings: {value} ({share:.0%}).")
+            out.notes.append(f"Level {level} headings: {ALIGN_WORDS.get(value, value)} ({share:.0%}).")
         if level == 1:
             h["new_page"] = True
         headings.append(h)
@@ -182,7 +184,7 @@ def learn_rulebook(source: bytes, base: str = "default", name: str = "Learned fr
         if ch_sec > 0:
             fmt, _ = section_number_format(model.sections[0]._sectPr)
             pn["preliminaries"] = fmt
-            out.notes.append(f"Preliminary pages numbered {fmt.replace('_', ' ')}.")
+            out.notes.append(f"Preliminary pages numbered {NUMBER_WORDS.get(fmt, fmt)}.")
         fmt, _ = section_number_format(model.sections[ch_sec]._sectPr)
         pn["main"] = fmt
         loc = page_number_location(model.sections, ch_sec)
