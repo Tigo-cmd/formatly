@@ -3,8 +3,21 @@ import io
 import docx
 import pytest
 
-from formatly_engine import check, fix
+from formatly_engine import check as _check
+from formatly_engine import fix as _fix
+from formatly_engine import load_rulebook
 from samples import build_messy_project, build_project
+
+# The samples follow the generic rulebook (A4, 1.5 in binding margin, APA 7).
+GENERIC = load_rulebook("generic")
+
+
+def check(data, rules=None):
+    return _check(data, rules or GENERIC)
+
+
+def fix(data, rules=None):
+    return _fix(data, rules or GENERIC)
 
 # One typical mistake -> the rule that must catch it, and whether auto-fix must remove it.
 MISTAKES = [
@@ -105,8 +118,7 @@ def test_annotated_copy_has_comments():
 
 
 def test_comment_limit_per_rule():
-    from formatly_engine import load_rulebook
-    rb = load_rulebook()
+    rb = load_rulebook("generic")
     rb.report.comments_per_rule = 2
     result = check(build_project(body_font="Calibri"), rb)
     data = result.annotated_bytes()

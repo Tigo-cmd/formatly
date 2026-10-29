@@ -23,11 +23,12 @@ The full product plan is in [PLAN.md](PLAN.md).
 cd engine
 pip install -e ".[dev]"
 python scripts/make_samples.py ../out
-formatly check ../out/sample-messy.docx -o ../out/commented.docx
-formatly fix ../out/sample-messy.docx -o ../out/fixed.docx
+formatly check ../out/standard-with-mistakes.docx -o ../out/commented.docx
+formatly fix ../out/standard-with-mistakes.docx -o ../out/fixed.docx
 ```
 
 ## Rulebooks
 
 Rules are written as a rulebook: see [docs/rulebook.md](docs/rulebook.md).
-The built-in default is temporary until the official default is supplied.
+The default is the **Formatly Standard**, built from the team's template
+documents, with variants for seminars and postgraduate work.

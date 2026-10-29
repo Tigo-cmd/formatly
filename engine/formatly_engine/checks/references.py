@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import date
 from dataclasses import dataclass
 
-from ..docmodel import Block, word_count
+from docx.oxml.ns import qn
+
+from ..docmodel import Block, iter_flow, word_count
 from ..issues import Issue
 from ..units import fmt_length
 from .base import INDENT_TOLERANCE, Context, text_problems
@@ -50,6 +53,12 @@ class Citation:
     surname: str
     year: str
     text: str
+    names: tuple[str, ...] = ()  # every capitalised word of the author part, folded
+
+
+def _name_words(names: str) -> tuple[str, ...]:
+    return tuple(_fold(w).strip("'’-") for w in re.findall(r"[A-Z\u00C0-\u024F][\w'’\-]+", names)
+                 if w.lower() not in ("et", "al", "and", "mr", "mrs", "dr", "prof", "engr"))
 
 
 @dataclass
@@ -76,7 +85,8 @@ def parse_citations(blocks: list[Block]) -> list[Citation]:
                 if not names[:1].isupper() or word_count(names) > 8:
                     continue
                 for y in re.findall(YEAR, pm.group("years"), re.I):
-                    out.append(Citation(b.index, _surname_key(names), _year_key(y), f"({part})"))
+                    out.append(Citation(b.index, _surname_key(names), _year_key(y), f"({part})",
+                                        _name_words(names)))
         for m in NARRATIVE_RE.finditer(text):
             if any(s <= m.start("name") < e for s, e in spans):
                 continue
@@ -84,15 +94,35 @@ def parse_citations(blocks: list[Block]) -> list[Citation]:
             if pre in NOT_AUTHOR_BEFORE:
                 continue
             for y in re.findall(YEAR, m.group("years"), re.I):
-                out.append(Citation(b.index, _surname_key(m.group("name")), _year_key(y),
-                                    m.group(0)[len(m.group("pre") or ""):]))
+                surname = _surname_key(m.group("name"))
+                out.append(Citation(b.index, surname, _year_key(y), m.group(0)[len(m.group("pre") or ""):],
+                                    (surname,)))
     return out
 
 
-def parse_reference(b: Block) -> Reference:
-    text = b.text.strip()
+@dataclass
+class Entry:
+    """One reference, which a writer may have broken over several paragraphs."""
+
+    blocks: list[Block]
+
+    @property
+    def first(self) -> Block:
+        return self.blocks[0]
+
+    @property
+    def text(self) -> str:
+        return re.sub(r"\s+", " ", " ".join(b.text for b in self.blocks)).strip()
+
+
+# "Okafor, C." or "Devivara Prasad, G." at the start of a line: a new reference.
+ENTRY_START_RE = re.compile(r"^[A-Z\u00C0-\u024F][\w'’\-]+(?:\s[A-Z][\w'’\-]+){0,3},\s+[A-Z]")
+
+
+def parse_reference(entry: Entry) -> Reference:
+    text = entry.text
     ym = REF_YEAR_RE.search(text[:300])
-    return Reference(b.index, _surname_key(re.split(r"[,.(]", text, maxsplit=1)[0]),
+    return Reference(entry.first.index, _surname_key(re.split(r"[,.(]", text, maxsplit=1)[0]),
                      _year_key(ym.group(1)) if ym else None, text)
 
 
@@ -106,22 +136,67 @@ def reference_blocks(ctx: Context) -> list[Block]:
         return []
     return [b for b in ctx.blocks[hit.block + 1:hit.end]
             if b.kind == "p" and not b.is_empty and b.index not in ctx.outline.headings
-            and word_count(b.text) >= 3]
+            and word_count(b.text) >= 1]
+
+
+def _has_layout_marks(p_el) -> bool:
+    for node in iter_flow(p_el, (qn("w:tab"), qn("w:br"), qn("w:cr"))):
+        if node.tag != qn("w:br") or node.get(qn("w:type")) in (None, "textWrapping"):
+            return True
+    return False
+
+
+def reference_entries(ctx: Context) -> list[Entry]:
+    """Paragraphs of the reference list grouped into references: a line with no
+    year in brackets that does not start "Surname, X." continues the one before."""
+    entries: list[Entry] = []
+    for b in reference_blocks(ctx):
+        text = b.text.strip()
+        # A reference never begins with a lowercase word: that is a wrapped line.
+        starts = not text[:1].islower() and (bool(REF_YEAR_RE.search(text[:200]))
+                                             or bool(ENTRY_START_RE.match(text)))
+        if entries and not starts:
+            entries[-1].blocks.append(b)
+        else:
+            entries.append(Entry([b]))
+    return entries
 
 
 def check_references(ctx: Context) -> None:
     rules = ctx.rules.references
-    entries = reference_blocks(ctx)
+    entries = reference_entries(ctx)
     if not entries:
         return
 
     # Look of each entry.
     want = ctx.rules.reference_text()
-    for b in entries:
+    for entry in entries:
+        b = entry.first
         for suffix in ("font", "size", "line_spacing"):
             ctx.log.checked_rule(f"references.{suffix}")
-        for suffix, msg, hint in text_problems(ctx, b, want, check_first_line=False):
-            ctx.log.add(Issue(f"references.{suffix}", "error", f"Reference: {msg}", hint, b.index, fixable=True))
+        seen: set[str] = set()
+        for part in entry.blocks:
+            for suffix, msg, hint in text_problems(ctx, part, want, check_first_line=False):
+                if suffix not in seen:
+                    seen.add(suffix)
+                    ctx.log.add(Issue(f"references.{suffix}", "error", f"Reference: {msg}", hint, b.index,
+                                      fixable=True, data={"blocks": [x.index for x in entry.blocks]}))
+        ctx.log.checked_rule("references.layout")
+        if any(_has_layout_marks(x.el) for x in entry.blocks):
+            ctx.log.add(Issue(
+                "references.layout", "error",
+                "This reference uses tabs or line breaks to arrange its lines.",
+                "Remove them and let the hanging indent wrap the lines.", b.index,
+                fixable=True, data={"blocks": [x.index for x in entry.blocks]}))
+        ctx.log.checked_rule("references.split")
+        if len(entry.blocks) > 1:
+            ctx.log.add(Issue(
+                "references.split", "error",
+                f"This reference is broken over {len(entry.blocks)} paragraphs (Enter and Tab at the end of "
+                "lines). Keep each reference in one paragraph; the hanging indent wraps it.",
+                "Join the lines into one paragraph, then set a hanging indent.", b.index,
+                fixable=not any(x.ends_section for x in entry.blocks),
+                data={"blocks": [x.index for x in entry.blocks]}))
         if rules.hanging_indent:
             ctx.log.checked_rule("references.hanging_indent")
             pf = ctx.model.para_format(b)
@@ -133,7 +208,7 @@ def check_references(ctx: Context) -> None:
                     "Paragraph settings > Indentation > Special: Hanging, By: "
                     f"{fmt_length(rules.hanging_indent)}.", b.index, fixable=True))
 
-    refs = [parse_reference(b) for b in entries]
+    refs = [parse_reference(e) for e in entries]
 
     # Order.
     if rules.order == "alphabetical":
@@ -145,6 +220,17 @@ def check_references(ctx: Context) -> None:
                 "references.order", "error",
                 f"Not in alphabetical order: this should come before “{refs[i - 1].text[:40]}…”.",
                 "Sort the reference list A to Z by the first author's surname.", refs[i].block, fixable=True))
+
+    if rules.max_age_years:
+        oldest = date.today().year - rules.max_age_years
+        for r in refs:
+            ctx.log.checked_rule("references.age", severity=rules.age_severity)
+            if r.year and r.year[:4].isdigit() and int(r.year[:4]) < oldest:
+                ctx.log.add(Issue("references.age", rules.age_severity,
+                                  f"This source is from {r.year[:4]}. Sources should be from {oldest} or later "
+                                  f"(the last {rules.max_age_years} years).",
+                                  "Replace it with a recent source, unless it is a key or classic work.",
+                                  r.block, data={"year": int(r.year[:4]), "oldest": oldest}))
 
     if rules.style not in AUTHOR_DATE:
         return
@@ -178,19 +264,39 @@ def check_references(ctx: Context) -> None:
                      and ctx.outline.section_at(b.index) is not None
                      and ctx.outline.section_at(b.index).spec_id not in ("references", "appendices")]
     citations = parse_citations(citing_blocks)
-    ref_keys = {(r.surname, r.year) for r in refs}
-    ref_keys_loose = {(r.surname, (r.year or "")[:4]) for r in refs}
-    cited_loose = {(c.surname, c.year[:4]) for c in citations}
+    by_surname: dict[str, list[Reference]] = {}
+    for r in refs:
+        by_surname.setdefault(r.surname, []).append(r)
+    cited: set[int] = set()  # reference blocks that some citation points to
 
     reported: set[tuple[int, str, str]] = set()
     for c in citations:
         ctx.log.checked_rule("references.citation_missing", severity="warning")
-        if (c.surname, c.year) in ref_keys or (c.surname, c.year[:4]) in ref_keys_loose:
+        same_name = by_surname.get(c.surname, [])
+        exact = [r for r in same_name if (r.year or "")[:4] == c.year[:4]]
+        if exact:
+            cited.update(r.block for r in exact)
             continue
         key = (c.block, c.surname, c.year)
         if key in reported:
             continue
         reported.add(key)
+        # The author is in the list under another word of the name (a first name was used).
+        other = [r for w in c.names if w != c.surname for r in by_surname.get(w, [])]
+        candidates = same_name or other
+        if candidates:
+            r = next((x for x in candidates if (x.year or "")[:4] == c.year[:4]), candidates[0])
+            cited.add(r.block)
+            problems = []
+            if not same_name:
+                problems.append("cite the author by surname only")
+            if (r.year or "")[:4] != c.year[:4]:
+                problems.append(f"the reference list has this author with year {r.year or 'no date'}")
+            ctx.log.add(Issue("references.citation_mismatch", "warning",
+                              f"Citation {c.text.strip()[:60]}: {'; '.join(problems)}.",
+                              f"Make the citation match the reference “{r.text[:60]}…”.",
+                              c.block, data={"surname": c.surname, "year": c.year, "reference": r.block}))
+            continue
         ctx.log.add(Issue("references.citation_missing", "warning",
                           f"Citation {c.text.strip()[:60]} is not in the reference list.",
                           "Add the source to the reference list, or correct the author or year so they match.",
@@ -198,7 +304,7 @@ def check_references(ctx: Context) -> None:
     if citations:
         for r in refs:
             ctx.log.checked_rule("references.uncited", severity="warning")
-            if (r.surname, (r.year or "")[:4]) not in cited_loose:
+            if r.block not in cited:
                 ctx.log.add(Issue("references.uncited", "warning",
                                   "This reference is never cited in the text.",
                                   "Cite it where you use it, or remove it from the list.", r.block))

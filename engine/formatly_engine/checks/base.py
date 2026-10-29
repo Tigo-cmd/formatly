@@ -21,6 +21,8 @@ CAPTION_RE = re.compile(
     r"^\s*(table|figure|fig\.?|chart|plate|graph)\s+(\d+(?:\s*[.\-–]\s*\d+)*)\s*[:.\-–—]?\s*(.*)$",
     re.I | re.S,
 )
+# "i. ", "IV. ", "a) ", "3. ", "• " at the start of a line: a list item, typed by hand.
+LIST_MARKER_RE = re.compile(r"^\s*(?:(?:[ivxlcdm]{1,6}|[a-z]|\d{1,3})[.)]\s|[•●▪◦\-–*]\s)", re.I)
 ALIGN_WORDS = {"justify": "justified", "left": "left-aligned", "center": "centred", "right": "right-aligned"}
 
 
@@ -32,6 +34,7 @@ class Caption:
     parts: tuple[int, ...]
     target: int | None  # the table or figure block it belongs to
     position: str | None  # above / below its target
+    inline: bool = False  # in the same paragraph as the picture
 
 
 @dataclass
@@ -80,14 +83,30 @@ class Context:
 
     def is_prose(self, b: Block) -> bool:
         """A real paragraph of writing, not a short line, list item or label."""
-        return word_count(b.text) >= 12 and not self.model.para_format(b).numbered
+        return (word_count(b.text) >= 12 and not self.model.para_format(b).numbered
+                and not LIST_MARKER_RE.match(b.text))
 
     @cached_property
     def text_blocks(self) -> list[Block]:
         """Every paragraph of running text: body, excluding captions and listings."""
         return [b for b in self.blocks
                 if b.kind == "p" and not b.in_toc and b.index not in self.outline.listing_blocks
-                and b.index not in self.captions and b.index >= self.outline.title_page_end]
+                and b.index not in self.captions and b.index >= self.outline.title_page_end
+                and b.index not in self.outline.free_blocks]
+
+
+def alignment_ok(have: str, want) -> bool:
+    return have in want if isinstance(want, list) else have == want
+
+
+def first_alignment(want) -> str:
+    return want[0] if isinstance(want, list) else want
+
+
+def describe_alignment(want) -> str:
+    if isinstance(want, list):
+        return " or ".join(ALIGN_WORDS[a] for a in want)
+    return ALIGN_WORDS[want]
 
 
 def spacing_matches(pf: ParaFormat, want) -> bool:
@@ -140,9 +159,10 @@ def text_problems(ctx: Context, b: Block, want: TextRules, *, layout: bool = Tru
     if not layout:
         return out
     pf = ctx.model.para_format(b)
-    if want.alignment and pf.alignment != want.alignment:
-        out.append(("alignment", f"Text is {ALIGN_WORDS[pf.alignment]}. Required: {ALIGN_WORDS[want.alignment]}.",
-                    f"Set the paragraph alignment to {ALIGN_WORDS[want.alignment]}."))
+    if want.alignment and not alignment_ok(pf.alignment, want.alignment):
+        need = describe_alignment(want.alignment)
+        out.append(("alignment", f"Text is {ALIGN_WORDS[pf.alignment]}. Required: {need}.",
+                    f"Set the paragraph alignment to {need}."))
     if want.line_spacing and not spacing_matches(pf, want.line_spacing):
         have = describe_spacing(pf.line_rule, pf.line_value)
         need = describe_spacing(want.line_spacing.rule, want.line_spacing.value)

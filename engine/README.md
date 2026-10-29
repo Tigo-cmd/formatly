@@ -17,9 +17,9 @@ pip install -e ".[dev]"
 ## Try it
 
 ```sh
-python scripts/make_samples.py ../out          # a correct sample and a messy one
-formatly check ../out/sample-messy.docx -o ../out/commented.docx
-formatly fix   ../out/sample-messy.docx -o ../out/fixed.docx
+python scripts/make_samples.py ../out          # sample documents to try
+formatly check ../out/standard-with-mistakes.docx -o ../out/commented.docx
+formatly fix   ../out/standard-with-mistakes.docx -o ../out/fixed.docx
 formatly rules show default                    # the rulebook in use
 formatly check my-project.docx -r my-rules.yaml --json report.json
 ```
@@ -63,6 +63,11 @@ The tests build sample documents in code (`tests/samples.py`), one per typical
 mistake. Each mistake must be found, and each fixable one must be gone after
 `fix`. One test round-trips the samples through LibreOffice, when it is
 installed, to cover files written by programs other than Word.
+
+## Built-in rulebooks
+
+`default` (Formatly Standard, project), `seminar`, `postgraduate`, `generic`.
+Choose one with `-r`, e.g. `formatly check seminar.docx -r seminar`.
 
 ## Not yet covered (later phases)
 

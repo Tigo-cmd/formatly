@@ -8,7 +8,7 @@ from ..docmodel import word_count
 from ..issues import Issue
 from docx.oxml.ns import qn
 
-from ..docmodel import Block
+from ..docmodel import Block, iter_flow
 from .base import CAPTION_RE, Caption, Context, text_problems
 
 FIGURE_WORDS = ("figure", "fig", "fig.", "chart", "plate", "graph")
@@ -22,6 +22,7 @@ def find_captions(ctx: Context) -> dict[int, Caption]:
     """Caption paragraphs, told apart from sentences that merely start with "Table 4.1 shows"."""
     out: dict[int, Caption] = {}
     outline = ctx.outline
+    parsed = []
     for b in ctx.blocks:
         if b.kind != "p" or b.is_empty or b.in_toc or b.index in outline.listing_blocks:
             continue
@@ -29,13 +30,27 @@ def find_captions(ctx: Context) -> dict[int, Caption]:
         if not m or word_count(b.text) > 40:
             continue
         kind = _kind(m.group(1))
-        number = re.sub(r"\s+", "", m.group(2)).replace("-", ".").replace("–", ".")
+        number = re.sub(r"\s+", "", m.group(2)).replace("-", ".").replace("–", ".").rstrip(".")
         parts = tuple(int(x) for x in number.split(".") if x)
-        is_target = (lambda x: x.kind == "tbl") if kind == "table" else (lambda x: x.has_image)
+        if kind == "figure" and b.has_image:  # picture and caption in one paragraph
+            out[b.index] = Caption(b.index, kind, number, parts, b.index,
+                                   "below" if _image_first(b.el) else "above", inline=True)
+        else:
+            parsed.append((b, kind, number, parts))
+    for b, kind, number, parts in parsed:
+        def is_target(x, kind=kind):
+            if kind == "table":
+                return x.kind == "tbl"
+            return x.has_image and x.index not in out  # not a picture that has its own caption
         above_target = next((x for x in ctx.nonempty_neighbours(b.index, +1, 1) if is_target(x)), None)
         below_target = next((x for x in ctx.nonempty_neighbours(b.index, -1, 2) if is_target(x)), None)
-        styled = "caption" in ctx.model.para_format(b).style_name.lower()
-        if above_target is None and below_target is None and not styled:
+        pf = ctx.model.para_format(b)
+        styled = "caption" in pf.style_name.lower()
+        # A short centred or italic "Figure 4.5 …" line is a caption even if its
+        # picture is misplaced; a sentence ("Table 4.1 shows …") is not.
+        looks_like = (word_count(b.text) <= 25 and not b.text.strip().endswith(".")
+                      and (pf.alignment == "center" or all(rf.italic for _, rf in ctx.model.run_formats(b))))
+        if above_target is None and below_target is None and not (styled or looks_like):
             continue
         if above_target is not None:
             target, position = above_target.index, "above"
@@ -47,35 +62,67 @@ def find_captions(ctx: Context) -> dict[int, Caption]:
     return out
 
 
+def _image_first(p_el) -> bool:
+    """Does the picture come before the text in this paragraph?"""
+    for node in iter_flow(p_el, (qn("w:t"), qn("w:drawing"), qn("w:pict"))):
+        if node.tag == qn("w:t"):
+            if (node.text or "").strip():
+                return False
+        else:
+            return True
+    return True
+
+
+def figure_groups(ctx: Context) -> list[list[int]]:
+    """Pictures inside chapters, with consecutive picture paragraphs (a figure in
+    several parts, such as a flowchart) grouped together."""
+    groups: list[list[int]] = []
+    current: list[int] = []
+    for b in ctx.blocks:
+        in_chapter = ctx.outline.chapter_at(b.index) is not None
+        if in_chapter and b.kind == "p" and b.has_image:
+            current.append(b.index)
+            if b.index in ctx.captions:  # a picture with its own caption is a complete figure
+                groups.append(current)
+                current = []
+        elif b.is_empty and current:
+            continue
+        else:
+            if current:
+                groups.append(current)
+            current = []
+    if current:
+        groups.append(current)
+    return groups
+
+
 def check_captions(ctx: Context) -> None:
     rules = ctx.rules.captions
     outline = ctx.outline
     captioned = {c.target: c for c in ctx.captions.values() if c.target is not None}
 
     # Every table and figure inside a chapter needs a caption, in the right place.
-    for b in ctx.blocks:
-        if outline.chapter_at(b.index) is None:
-            continue
-        if b.kind == "tbl":
-            kind, want = "table", rules.table_position
-        elif b.kind == "p" and b.has_image:
-            kind, want = "figure", rules.figure_position
-        else:
-            continue
+    targets = [("table", rules.table_position, [b.index])
+               for b in ctx.blocks if b.kind == "tbl" and outline.chapter_at(b.index) is not None]
+    targets += [("figure", rules.figure_position, g) for g in figure_groups(ctx)]
+    for kind, want, members in sorted(targets, key=lambda t: t[2][0]):
+        b = ctx.blocks[members[0]]
         ctx.log.checked_rule("captions.missing")
-        cap = captioned.get(b.index)
+        cap = next((captioned[i] for i in members if i in captioned), None)
         if cap is None:
             ctx.log.add(Issue("captions.missing", "error", f"This {kind} has no caption.",
                               f"Add a caption {want or 'next to it'}, e.g. “{kind.capitalize()} "
                               f"{outline.chapter_at(b.index)}.1: Title”.", b.index))
             continue
-        if want:
+        if want and not cap.inline:
             ctx.log.checked_rule("captions.position")
             if cap.position != want:
                 ctx.log.add(Issue("captions.position", "error",
                                   f"{kind.capitalize()} caption should be {want} the {kind}, not {cap.position}.",
                                   f"Move “{kind.capitalize()} {cap.number}” {want} the {kind}.",
-                                  cap.block, fixable=True, data={"target": b.index, "want": want}))
+                                  cap.block, fixable=True,
+                                  data={"target": (members[0] if want == "above" else members[-1]),
+                                        "want": want}))
 
     # How captions and table text look.
     cap_want = ctx.rules.caption_text()

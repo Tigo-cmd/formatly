@@ -22,6 +22,8 @@ BUILTIN_DIR = Path(__file__).parent / "rulebooks"
 Length = Annotated[int, BeforeValidator(parse_length)]
 Alignment = Literal["left", "center", "right", "justify"]
 NumberFormat = Literal["lower_roman", "upper_roman", "decimal", "none"]
+PaperSize = Literal["A4", "Letter", "Legal", "A5"]
+Severity = Literal["error", "warning", "suggestion"]
 
 
 class _Model(BaseModel):
@@ -62,7 +64,7 @@ class TextRules(_Model):
     bold: bool | None = None
     italic: bool | None = None
     all_caps: bool | None = None
-    alignment: Alignment | None = None
+    alignment: Alignment | list[Alignment] | None = None  # a list accepts any of them
     line_spacing: LineSpacingField = None
     space_before: Length | None = None
     space_after: Length | None = None
@@ -78,7 +80,7 @@ class Margins(_Model):
 
 
 class PageRules(_Model):
-    size: Literal["A4", "Letter", "Legal", "A5"] | None = "A4"
+    size: PaperSize | list[PaperSize] | None = "A4"  # a list accepts any; auto-fix uses the first
     orientation: Literal["portrait", "landscape"] | None = "portrait"
     allow_landscape_sections: bool = True  # e.g. for a wide table
     margins: Margins | None = None
@@ -96,8 +98,24 @@ class SectionSpec(_Model):
     id: str
     title: str
     aliases: list[str] = []
-    required: bool = True
+    # True, False, or required only when the document has figures / tables.
+    required: bool | Literal["if_figures", "if_tables", "if_figures_or_tables"] = True
+    alternatives: list[str] = []  # ids of sections that can stand in for this one
     body_text: bool = False  # check its paragraphs against the body text rules
+    text: TextRules | None = None  # overrides the body text rules for this section
+    must_include: list[str] = []  # phrases the section must contain (any case)
+    must_not_include: list[str] = []  # phrases it must not contain
+    max_paragraphs: int | None = None
+    free_format: bool = False  # pasted material (code, questionnaires): only its heading is checked
+
+
+class SubsectionSpec(_Model):
+    """A numbered heading a chapter must have, e.g. 1.2 Statement of the Problem."""
+
+    number: str
+    title: str
+    aliases: list[str] = []
+    required: bool = True
 
 
 class ChapterSpec(_Model):
@@ -105,6 +123,7 @@ class ChapterSpec(_Model):
     title: str
     aliases: list[str] = []
     required: bool = True
+    sections: list[SubsectionSpec] = []
 
 
 class StructureRules(_Model):
@@ -140,6 +159,8 @@ class ReferenceRules(_Model):
     hanging_indent: Length | None = parse_length("0.5in")
     text: TextRules | None = None  # unset fields fall back to the body text rules
     check_citations: bool = True
+    max_age_years: int | None = None  # sources older than this many years are flagged
+    age_severity: Severity = "warning"
 
 
 class LimitRules(_Model):
@@ -156,7 +177,20 @@ class HygieneRules(_Model):
 
 class TocRules(_Model):
     automatic: bool = True  # must be Word's automatic table of contents
-    up_to_date: bool = True
+    up_to_date: bool = True  # headings, their numbers and titles match the body
+    lists_match_captions: bool = True  # lists of tables / figures match the captions
+
+
+class Requirement(_Model):
+    """Something a page must contain, as a regular expression (any case)."""
+
+    pattern: str
+    label: str  # what to tell the writer is missing, e.g. "your registration number"
+
+
+class TitlePageRules(_Model):
+    text: TextRules | None = None
+    must_include: list[Requirement] = []
 
 
 class ReportRules(_Model):
@@ -180,6 +214,7 @@ class Rulebook(_Model):
     limits: LimitRules = LimitRules()
     hygiene: HygieneRules = HygieneRules()
     toc: TocRules = TocRules()
+    title_page: TitlePageRules = TitlePageRules()
     report: ReportRules = ReportRules()
 
     @field_validator("headings")
@@ -195,13 +230,10 @@ class Rulebook(_Model):
 
     def reference_text(self) -> TextRules:
         """Reference list text rules, falling back to the body rules."""
+        merged = merge_text(self.body, self.references.text)
         own = self.references.text or TextRules()
-        merged = self.body.model_dump()
-        merged.update({k: v for k, v in own.model_dump().items() if v is not None})
-        merged["first_line_indent"] = None  # references use a hanging indent instead
-        merged["alignment"] = own.alignment
-        return TextRules.model_validate(_lengths_back(merged))
-
+        # References use a hanging indent instead, and are often left-aligned.
+        return merged.model_copy(update={"first_line_indent": None, "alignment": own.alignment})
 
     def caption_text(self) -> TextRules:
         own = self.captions.text or TextRules()
@@ -211,14 +243,20 @@ class Rulebook(_Model):
         own = self.captions.table_text or TextRules()
         return own.model_copy(update={"font": own.font or self.body.font})
 
+    def section_spec(self, spec_id: str) -> "SectionSpec | None":
+        return next((s for s in (*self.structure.preliminaries, *self.structure.back_matter) if s.id == spec_id),
+                    None)
 
-def _lengths_back(d: dict) -> dict:
-    """model_dump turns lengths into twip ints; parse_length treats ints as points."""
-    out = dict(d)
-    for k in ("space_before", "space_after", "first_line_indent"):
-        if isinstance(out.get(k), int):
-            out[k] = f"{out[k]}twip"
-    return out
+    def body_text_for(self, spec_id: str | None) -> TextRules:
+        """Body text rules inside a section, with that section's overrides."""
+        spec = self.section_spec(spec_id) if spec_id else None
+        return merge_text(self.body, spec.text if spec else None)
+
+
+def merge_text(base: TextRules, over: TextRules | None) -> TextRules:
+    if over is None:
+        return base
+    return base.model_copy(update={k: v for k, v in over if v is not None})
 
 
 def deep_merge(base: dict, override: dict) -> dict:

@@ -314,3 +314,211 @@ def build_messy_project() -> bytes:
 
 
 __all__ = ["build_project", "build_messy_project", "WD_BREAK"]
+
+
+# --------------------------------------------------------------------------
+# Formatly Standard (the default rulebook): built after the team's templates
+# --------------------------------------------------------------------------
+
+def build_standard_project(
+    *,
+    seminar: bool = False,
+    certification_supervisor: bool = False,
+    missing_scope: bool = False,
+    old_reference: bool = False,
+    abstract_two_paragraphs: bool = False,
+    abstract_double: bool = False,
+    toc_wrong_title: bool = False,
+    toc_without_numbers: bool = False,
+    list_title_mismatch: bool = False,
+    no_list_of_tables: bool = False,
+    blank_lines_before_chapter: bool = False,
+    split_reference: bool = False,
+    reference_tabs: bool = False,
+    title_page_no_reg_number: bool = False,
+    a4: bool = False,
+    report_kind: str | None = None,  # e.g. "DISSERTATION"
+) -> bytes:
+    from datetime import date
+
+    year = date.today().year
+    doc = Document()
+    normal = doc.styles["Normal"]
+    set_style_font(normal, "Times New Roman")
+    normal.font.size = Pt(12)
+    pf = normal.paragraph_format
+    pf.line_spacing = 2.0
+    pf.space_before = Pt(0)
+    pf.space_after = Pt(0)
+    pf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    pf.first_line_indent = Inches(0)
+
+    sec = doc.sections[0]
+    if a4:
+        sec.page_width, sec.page_height = Mm(210), Mm(297)
+    else:
+        sec.page_width, sec.page_height = Inches(8.5), Inches(11)
+    for side in ("top_margin", "bottom_margin", "left_margin", "right_margin"):
+        setattr(sec, side, Inches(1))
+
+    def para(text, *, bold=False, center=False, new_page=False, spacing=None, italic=False):
+        p = doc.add_paragraph()
+        r = p.add_run(text)
+        r.bold = bold
+        r.italic = italic
+        if center:
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if new_page:
+            p.paragraph_format.page_break_before = True
+        if spacing is not None:
+            p.paragraph_format.line_spacing = spacing
+        return p
+
+    def heading(text, *, new_page=False):  # level 1: centred, bold, capitals
+        return para(text.upper(), bold=True, center=True, new_page=new_page)
+
+    def sub(text):  # level 2 / 3: bold, capitals for level 2
+        number, title = text.split(" ", 1)
+        return para(f"{number} {title.upper() if number.count('.') == 1 else title}", bold=True)
+
+    kind = report_kind or ("SEMINAR" if seminar else "PROJECT")
+    title = "DESIGN OF A SMART IRRIGATION CONTROLLER"
+    lines = [title, "BY", "ADA OKONKWO"]
+    if not title_page_no_reg_number:
+        lines.append("MOUAU/CME/19/123456")
+    lines += [f"A {kind} REPORT SUBMITTED TO THE DEPARTMENT OF COMPUTER ENGINEERING",
+              "MICHAEL OKPARA UNIVERSITY OF AGRICULTURE, UMUDIKE", f"AUGUST {year}"]
+    for line in lines:
+        para(line, bold=True, center=True)
+
+    prose = ("This report describes the design and construction of a controller that waters crops "
+             "automatically using soil moisture readings and a small solar powered pump.")
+    heading("DECLARATION", new_page=True)
+    para(f"I declare that this {kind.lower()} is my original work and has not been submitted elsewhere "
+         "for the award of any degree.", spacing=1.5)
+    heading("CERTIFICATION", new_page=True)
+    para(f"This is to certify that this {kind.lower()} was carried out by Ada Okonkwo in the Department "
+         "of Computer Engineering and meets the requirements of the department.", spacing=1.5)
+    for signer in ("Project Supervisor", "Head of Department",
+                   "External Supervisor" if certification_supervisor else "External Examiner"):
+        para(signer, spacing=1.5)
+    heading("DEDICATION", new_page=True)
+    para("This work is dedicated to my parents for their love, patience and support throughout my studies "
+         "at the university.", spacing=1.5)
+    heading("ACKNOWLEDGEMENT", new_page=True)
+    para("I thank my supervisor and every member of staff of the department for their guidance and "
+         "encouragement during this work.", spacing=1.5)
+
+    chapter_one = [("1.1", "Background of the Study" if seminar else "Background of the Project"),
+                   ("1.2", "Statement of the Problem"), ("1.3", "Aim and Objectives"),
+                   ("1.4", "Significance of the Study" if seminar else "Significance of the Project")]
+    if not missing_scope:
+        chapter_one.append(("1.5", "Scope of the Study" if seminar else "Scope of the Project"))
+    chapters = [
+        ("ONE", "INTRODUCTION", chapter_one),
+        ("TWO", "LITERATURE REVIEW", [("2.1", "Review of Relevant Literature"), ("2.2", "Review of Related Works"),
+                                      ("2.3", "Summary of Literature Review")]),
+    ]
+    if not seminar:
+        chapters += [
+            ("THREE", "MATERIALS AND METHODS", [("3.1", "Materials"), ("3.2", "Methods")]),
+            ("FOUR", "RESULTS AND DISCUSSION", [("4.1", "Results")]),
+            ("FIVE", "CONCLUSION AND RECOMMENDATION", [("5.1", "Conclusion"), ("5.2", "Recommendation")]),
+        ]
+
+    heading("TABLE OF CONTENTS", new_page=True)
+    prelim_lines = ["Title Page\ti", "Declaration\tii", "Certification\tiii", "Dedication\tiv",
+                    "Acknowledgement\tv", "Table of Contents\tvi", "List of Figures\tvii"]
+    if not no_list_of_tables:
+        prelim_lines.append("List of Tables\tviii")
+    prelim_lines.append("Abstract\tix")
+    for line in prelim_lines:
+        para(line)
+    for word, ch_title, subs in chapters:
+        para(f"CHAPTER {word}: {ch_title}\t1")
+        for number, sub_title in subs:
+            shown = sub_title
+            if toc_wrong_title and number == "2.2":
+                shown = "Overview of Existing Systems"
+            para(f"{'' if toc_without_numbers else number + ' '}{shown}\t1")
+    para("REFERENCES\t9")
+
+    table_chapter = 2 if seminar else 4
+    figure_title = "Block diagram of the controller"
+    heading("LIST OF FIGURES", new_page=True)
+    para(f"Figure {table_chapter}.1 {'Circuit layout' if list_title_mismatch else figure_title}\tv")
+    if not no_list_of_tables:
+        heading("LIST OF TABLES", new_page=True)
+        para(f"Table {table_chapter}.1 Cost of components\tvi")
+
+    heading("ABSTRACT", new_page=True)
+    abstract = " ".join([prose] * 4)
+    para(abstract, spacing=2.0 if abstract_double else 1.0)
+    if abstract_two_paragraphs:
+        para(prose, spacing=1.0)
+
+    doc.add_section(WD_SECTION.NEW_PAGE)
+    for n, (word, ch_title, subs) in enumerate(chapters, start=1):
+        if blank_lines_before_chapter and n == 2:
+            for _ in range(8):
+                doc.add_paragraph()
+        heading(f"CHAPTER {word}", new_page=n > 1 and not (blank_lines_before_chapter and n == 2))
+        heading(ch_title)
+        for number, sub_title in subs:
+            sub(f"{number} {sub_title}")
+            cites = f"Prior systems watered on fixed timers (Okafor & Bello, {year - 2}), while Eze et al. ({year - 1}) used sensors."
+            para(prose)
+            para(cites)
+        if n == table_chapter:
+            para(f"As shown in Table {table_chapter}.1 and Figure {table_chapter}.1, the controller uses few parts.")
+            para(f"Table {table_chapter}.1 Cost of components", center=True)
+            t = doc.add_table(rows=2, cols=2)
+            t.style = "Table Grid"
+            t.rows[0].cells[0].text, t.rows[0].cells[1].text = "Component", "Cost"
+            t.rows[1].cells[0].text, t.rows[1].cells[1].text = "Sensor", "2,000"
+            doc.add_picture(io.BytesIO(tiny_png()), width=Inches(2))
+            doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            para(f"Figure {table_chapter}.1 {figure_title}", center=True)
+
+    heading("REFERENCES", new_page=True)
+    refs = [f"Eze, C., Nwosu, P., & Obi, L. ({year - 1}). Sensor-based irrigation for small farms. "
+            "Journal of Agricultural Engineering, 12(2), 40–52.",
+            f"Okafor, C., & Bello, A. ({year - 2}). Automatic watering with solar pumps. Lagos: University Press."]
+    if old_reference:
+        refs.insert(1, "Musa, K. (2010). Irrigation in the savannah. Abuja: Policy Press.")
+        doc.paragraphs[-1]  # keep the reference cited below
+    for r in refs:
+        if split_reference and r.startswith("Okafor"):
+            first, rest = r.split(" Lagos:", 1)
+            p1 = para(first, spacing=1.5)
+            p2 = para("\tLagos:" + rest, spacing=1.5)
+            for p in (p1, p2):
+                p.paragraph_format.left_indent = Inches(0.5)
+                p.paragraph_format.first_line_indent = Inches(-0.5)
+            continue
+        text = r.replace(" Journal", "\tJournal") if reference_tabs else r
+        p = para(text, spacing=1.5)
+        p.paragraph_format.left_indent = Inches(0.5)
+        p.paragraph_format.first_line_indent = Inches(-0.5)
+    if old_reference:
+        # cite Musa in the last chapter so only its age is the problem
+        target = [p for p in doc.paragraphs if p.text.startswith("Prior systems")][-1]
+        target.add_run(" Earlier work agreed (Musa, 2010).")
+
+    sections = doc.sections
+    for s in sections:
+        s.page_width, s.page_height = sec.page_width, sec.page_height
+        for side in ("top_margin", "bottom_margin", "left_margin", "right_margin"):
+            setattr(s, side, getattr(sec, side))
+    footer = sections[0].footer
+    footer.is_linked_to_previous = False
+    fp = footer.paragraphs[0]
+    fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    add_field(fp, "PAGE")
+    sections[0].different_first_page_header_footer = True
+    set_page_numbering(sections[0], "lowerRoman", None)
+    set_page_numbering(sections[1], "decimal", 1)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()

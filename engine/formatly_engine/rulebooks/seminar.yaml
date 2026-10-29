@@ -1,0 +1,85 @@
+# Formatly Standard: seminar.
+#
+# Same layout as the project, with "Background of the Study" in Chapter One
+# and a seminar title page. A seminar covers Chapters One and Two; the
+# later chapters are optional.
+
+name: Formatly Standard (Seminar)
+version: 2
+extends: default
+description: >
+  The Formatly Standard layout for seminar reports: Chapters One and Two
+  required, "Background of the Study", seminar title page.
+
+title_page:
+  text:
+    font: Times New Roman
+    size: 12
+    bold: true
+    all_caps: true
+    alignment: center
+  must_include:
+    - pattern: '\bby\b'
+      label: "the word “BY” before your name"
+    - pattern: '\b[A-Z]{2,}/[A-Z0-9]{2,}/\d{2,4}/\d{3,}\b|reg(istration)?\.?\s*no|matric'
+      label: "your registration number"
+    - pattern: '\bseminar\b'
+      label: "that it is a seminar report"
+    - pattern: '\bsubmitted\b'
+      label: "the statement “submitted to the Department of …”"
+    - pattern: '\bdepartment of\b'
+      label: "your department"
+    - pattern: 'universit|polytechnic|college|institute'
+      label: "your institution"
+    - pattern: '(january|february|march|april|may|june|july|august|september|october|november|december)\s*,?\s*(19|20)\d\d'
+      label: "the month and year of submission"
+
+structure:
+  chapters:
+    - number: 1
+      title: Introduction
+      sections:
+        - number: "1.1"
+          title: Background of the Study
+          aliases: [Background to the Study, Background of Study, Background of the Project,
+                    Background to the Project, Background Information, Background]
+        - number: "1.2"
+          title: Statement of the Problem
+          aliases: [Problem Statement, Statement of Problem]
+        - number: "1.3"
+          title: Aim and Objectives
+          aliases: [Aims and Objectives, Aim and Objective, Objectives of the Study, Objectives of the Project]
+        - number: "1.4"
+          title: Significance of the Study
+          aliases: [Significance of the Project, Significance, Justification of the Study, Justification]
+        - number: "1.5"
+          title: Scope of the Study
+          aliases: [Scope of the Project, Scope and Limitations, Scope and Limitation, Scope]
+    - number: 2
+      title: Literature Review
+      aliases: [Review of Related Literature, Review of Literature]
+      sections:
+        - number: "2.1"
+          title: Review of Relevant Literature
+          aliases: [Review of Related Literature, Conceptual Review, Theoretical Framework, Literature Review]
+        - number: "2.2"
+          title: Review of Related Works
+          aliases: [Related Works, Review of Past Works, Review of Past/Reported Works, Review of Reported Works,
+                    Empirical Review, Review of Existing Systems]
+        - number: "2.3"
+          title: Summary of Literature Review
+          aliases: [Summary, Summary of Related Works, Summary of Reviewed Literature, Research Gap,
+                    Brief Introduction of Proposed Work, Brief Introduction of Work, Proposed Work]
+    - number: 3
+      title: Materials and Methods
+      aliases: [Methodology, Research Methodology, Materials and Method, System Analysis and Design,
+                Design and Methodology, Research Methods]
+      required: false
+    - number: 4
+      title: Results and Discussion
+      aliases: [Results and Discussions, Testing and Results, Implementation and Results, Results]
+      required: false
+    - number: 5
+      title: Conclusion and Recommendation
+      aliases: [Conclusion and Recommendations, "Summary, Conclusion and Recommendations", Conclusion]
+      required: false

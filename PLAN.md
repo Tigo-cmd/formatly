@@ -208,8 +208,10 @@ formatly/
 
 ## 12. Open items
 
-- Default rulebook: to be provided by the Formatly team; a temporary one is in
-  `engine/formatly_engine/rulebooks/default.yaml` until then.
+- Default rulebook: the Formatly Standard (`default`, `seminar`,
+  `postgraduate`) is built from the team's templates. Open questions: abstract
+  spacing (single assumed), Letter vs A4 (both accepted), which chapters a
+  seminar requires (One and Two assumed).
 - Check that the name, domain and Play Store listing for "Formatly" are
   available.
-- Real guideline documents and sample works (anonymised) for testing.
+- More real sample works (anonymised) for testing.

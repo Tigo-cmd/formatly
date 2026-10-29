@@ -351,15 +351,33 @@ class Block:
 _IMAGE_TAGS = (qn("w:drawing"), qn("w:pict"), qn("w:object"))
 
 
+MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+# Content inside these is not part of the paragraph's own text: drawings and
+# text boxes (a flowchart's labels), and paragraph / run property settings
+# (whose <w:tab> elements are tab stops, not tab characters).
+_SKIP = {qn("w:drawing"), qn("w:pict"), qn("w:object"), qn("w:txbxContent"), qn("w:pPr"), qn("w:rPr"),
+         f"{{{MC_NS}}}AlternateContent", qn("w:del"), qn("w:moveFrom")}
+
+
+def iter_flow(el, tags: tuple):
+    """Elements with the given tags in reading order, skipping drawings, text
+    boxes, property settings and deleted text."""
+    for child in el:
+        if child.tag in tags:
+            yield child
+        if len(child) and child.tag not in _SKIP:
+            yield from iter_flow(child, tags)
+
+
 def paragraph_text(p_el) -> str:
-    """Visible text of a paragraph, including hyperlinks, excluding deleted text."""
+    """Visible text of a paragraph, including hyperlinks, excluding deleted text and drawings."""
     parts: list[str] = []
-    for node in p_el.iter(qn("w:t"), qn("w:tab"), qn("w:br"), qn("w:delText")):
+    for node in iter_flow(p_el, (qn("w:t"), qn("w:tab"), qn("w:br"))):
         if node.tag == qn("w:t"):
             parts.append(node.text or "")
         elif node.tag == qn("w:tab"):
             parts.append("\t")
-        elif node.tag == qn("w:br") and node.get(qn("w:type")) in (None, "textWrapping"):
+        elif node.get(qn("w:type")) in (None, "textWrapping"):
             parts.append("\n")
     return "".join(parts)
 
@@ -371,7 +389,7 @@ def _has_image(p_el) -> bool:
 def _page_break_positions(p_el) -> tuple[bool, bool]:
     """(starts with a page break, ends with a page break), ignoring empty text."""
     tokens: list[str] = []
-    for node in p_el.iter(qn("w:t"), qn("w:br"), *_IMAGE_TAGS):
+    for node in iter_flow(p_el, (qn("w:t"), qn("w:br"), *_IMAGE_TAGS)):
         if node.tag == qn("w:br"):
             if node.get(qn("w:type")) == "page":
                 tokens.append("B")
@@ -476,7 +494,7 @@ def as_table(document: Document, block: Block) -> Table:
 def text_runs(p_el) -> list:
     """Runs that carry visible text (including those inside hyperlinks)."""
     out = []
-    for r in p_el.iter(qn("w:r")):
+    for r in iter_flow(p_el, (qn("w:r"),)):
         if any((t.text or "").strip() for t in r.findall(qn("w:t"))):
             out.append(r)
     return out

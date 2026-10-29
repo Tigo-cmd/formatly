@@ -10,7 +10,7 @@ from ..outline import NUMBER_WORDS
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-from .base import Context, spacing_matches, text_problems
+from .base import Context, alignment_ok, spacing_matches, text_problems
 
 FIXABLE_TEXT = {"font", "size", "bold", "italic", "caps", "alignment", "line_spacing",
                 "space_before", "space_after", "first_line_indent"}
@@ -19,10 +19,16 @@ FIXABLE_TEXT = {"font", "size", "bold", "italic", "caps", "alignment", "line_spa
 PLACEHOLDER_RE = re.compile(r"\[Formatly: [^\]]*\]")
 
 
+def section_id(ctx: Context, index: int) -> str | None:
+    sec = ctx.outline.section_at(index)
+    return sec.spec_id if sec else None
+
+
 def check_body(ctx: Context) -> None:
-    want = ctx.rules.body
-    style_hints: dict[str | None, set[str]] = {}
+    style_hints: dict[tuple, set[str]] = {}
     for b in ctx.body_blocks:
+        sid = section_id(ctx, b.index)
+        want = ctx.rules.body_text_for(sid)
         prose = ctx.is_prose(b)
         for suffix in ("font", "size"):
             if getattr(want, suffix):
@@ -32,12 +38,11 @@ def check_body(ctx: Context) -> None:
                 if getattr(want, suffix) is not None:
                     ctx.log.checked_rule(f"body.{suffix}")
         problems = text_problems(ctx, b, want, layout=prose)
-        if problems:
-            style_id = ctx.model.para_format(b).style_id
-            if style_id not in style_hints:
-                style_hints[style_id] = style_problems(ctx, style_id, want)
+        style_id = ctx.model.para_format(b).style_id
+        if problems and (style_id, sid) not in style_hints:
+            style_hints[(style_id, sid)] = style_problems(ctx, style_id, want)
         for suffix, msg, hint in problems:
-            if suffix in style_hints.get(ctx.model.para_format(b).style_id, ()):
+            if suffix in style_hints.get((style_id, sid), ()):
                 name = ctx.model.fmt.style_name(ctx.model.para_format(b).style_id)
                 hint += (f" Fastest: Home > Styles > right-click “{name}” > Modify. That fixes every "
                          f"paragraph using the {name} style at once.")
@@ -68,11 +73,21 @@ def check_headings(ctx: Context) -> None:
         if needs_new_page:
             ctx.log.checked_rule("headings.new_page")
             if not ctx.model.starts_new_page(b):
+                blanks = 0
+                for prev in reversed(ctx.blocks[:idx]):
+                    if not prev.is_empty:
+                        break
+                    blanks += 1
+                msg = f"“{b.text.strip()[:60]}” should start on a new page."
+                if blanks >= 3:
+                    msg += (f" It is pushed down with {blanks} empty lines, which breaks as soon as anything "
+                            "above it changes.")
                 ctx.log.add(Issue(
-                    "headings.new_page", "error",
-                    f"“{b.text.strip()[:60]}” should start on a new page.",
+                    "headings.new_page", "error", msg,
+                    "Delete the empty lines, put the cursor before the heading and press Ctrl+Enter "
+                    "(Insert > Page Break)." if blanks >= 3 else
                     "Put the cursor before it and press Ctrl+Enter (Insert > Page Break).",
-                    idx, fixable=True))
+                    idx, fixable=True, data={"blank_lines": blanks}))
 
     # "CHAPTER 1" vs "CHAPTER ONE".
     style = rules.structure.chapter_label
@@ -137,6 +152,12 @@ def _check_heading_numbers(ctx: Context) -> None:
 
 
 _DOUBLE_SPACE = re.compile(r"\S {2,}\S")
+_BOX_DRAWING = re.compile("[\u2500-\u257f]")
+URL_RE = re.compile(r"https?://|www\.", re.I)
+
+
+def run_text(r) -> str:
+    return "".join(t.text or "" for t in r.findall(qn("w:t")))
 
 
 def style_problems(ctx: Context, style_id: str | None, want) -> set[str]:
@@ -157,7 +178,7 @@ def style_problems(ctx: Context, style_id: str | None, want) -> set[str]:
         out.add("font")
     if want.size and abs(rf.size - want.size) > 0.25:
         out.add("size")
-    if want.alignment and pf.alignment != want.alignment:
+    if want.alignment and not alignment_ok(pf.alignment, want.alignment):
         out.add("alignment")
     if want.line_spacing and not spacing_matches(pf, want.line_spacing):
         out.add("line_spacing")
@@ -182,7 +203,7 @@ def check_hygiene(ctx: Context) -> None:
             ctx.log.checked_rule("hygiene.colour", severity="warning")
             coloured = [rf.color for r, rf in runs
                         if rf.color and rf.color.lower() not in ("auto", "000000")
-                        and not in_hyperlink(r)
+                        and not in_hyperlink(r) and not URL_RE.search(run_text(r))
                         and "hyperlink" not in (ctx.model.fmt.style_name(rf.style_id) or "").lower()]
             if coloured:
                 ctx.log.add(Issue("hygiene.colour", "warning", "Text is coloured; it should be black.",
@@ -194,7 +215,8 @@ def check_hygiene(ctx: Context) -> None:
                               "Write this section, then delete the text in square brackets.", b.index))
         if rules.no_double_spaces:
             ctx.log.checked_rule("hygiene.double_space", severity="warning")
-            n = len(_DOUBLE_SPACE.findall(b.text))
+            # Tree diagrams and similar drawings use spaces on purpose.
+            n = 0 if _BOX_DRAWING.search(b.text) else len(_DOUBLE_SPACE.findall(b.text))
             if n:
                 ctx.log.add(Issue("hygiene.double_space", "warning",
                                   f"{n} place{'s' if n > 1 else ''} with two or more spaces between words.",

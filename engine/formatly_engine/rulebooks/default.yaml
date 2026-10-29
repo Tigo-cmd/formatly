@@ -1,112 +1,213 @@
-# Formatly default rulebook. TEMPORARY.
+# Formatly Standard: final year project.
 #
-# Used when the user gives no guideline, and as the fallback for anything
-# their guideline does not mention. The Formatly team will replace this with
-# the official default. It follows common practice for project work, theses
-# and dissertations in Nigerian institutions, with APA 7 references.
+# The default rulebook. Built from the Formatly team's template documents
+# (preliminary pages and full project body) and their written guidance:
+#   - preliminary order: title page, declaration, certification, dedication,
+#     acknowledgement, table of contents, list of figures and tables, abstract
+#   - the table of contents and the lists must match the numbering in the body
+#   - the abstract is one paragraph, single spaced
+#   - the certification page is signed by the examiner, not a "supervisor"
+#   - in-text citations must match the reference list
+#   - sources should be from the last 3 to 4 years (older is tolerated for
+#     undergraduate work, so it is a suggestion here; see postgraduate.yaml)
+#   - Chapter One: background, statement of the problem, aim and objectives,
+#     significance, scope. Chapter Two: review of relevant literature,
+#     related works, summary.
+# Where the templates were inconsistent (e.g. spacing after paragraphs), the
+# rule is left unchecked rather than guessed.
 
-name: Formatly Standard (temporary)
-version: 1
+name: Formatly Standard (Project)
+version: 2
 description: >
-  A4, Times New Roman 12 pt, double spacing, 1.5 in binding margin, APA 7.
-  Preliminary pages in roman numerals, five chapters, references, appendices.
+  Times New Roman 12 pt, double-spaced justified body, 1 in margins,
+  bold capital headings, roman numerals for preliminary pages, five
+  chapters with required sections, APA 7 references with recent sources.
 
 page:
-  size: A4
+  size: [Letter, A4]        # the templates use Letter; A4 is also accepted
   orientation: portrait
   allow_landscape_sections: true
   margins:
     top: 1in
     bottom: 1in
-    left: 1.5in   # binding side
+    left: 1in
     right: 1in
 
 body:
   font: Times New Roman
   size: 12
   line_spacing: 2.0
-  space_before: 0pt
-  space_after: 0pt
   alignment: justify
-  first_line_indent: 0.5in
+  first_line_indent: 0in    # block paragraphs, no first-line indent
 
 headings:
-  - level: 1            # chapter labels and titles, main section titles
+  - level: 1            # CHAPTER ONE / INTRODUCTION / DECLARATION / REFERENCES
     font: Times New Roman
     size: 12
     bold: true
     all_caps: true
     alignment: center
     new_page: true
-  - level: 2            # 1.1 Background to the Study
+  - level: 2            # 1.1 BACKGROUND OF THE PROJECT
     font: Times New Roman
     size: 12
     bold: true
-    alignment: left
-  - level: 3            # 1.1.1 ...
+    all_caps: true
+    alignment: [left, justify]
+  - level: 3            # 2.1.1 GESTURE RECOGNITION SYSTEMS
     font: Times New Roman
     size: 12
     bold: true
-    alignment: left
+    alignment: [left, justify]
+
+title_page:
+  text:
+    font: Times New Roman
+    size: 12
+    bold: true
+    all_caps: true
+    alignment: center
+  must_include:
+    - pattern: '\bby\b'
+      label: "the word “BY” before your name"
+    - pattern: '\b[A-Z]{2,}/[A-Z0-9]{2,}/\d{2,4}/\d{3,}\b|reg(istration)?\.?\s*no|matric'
+      label: "your registration number"
+    - pattern: '\bproject\b'
+      label: "that it is a project report"
+    - pattern: '\bsubmitted\b'
+      label: "the statement “submitted to the Department of …”"
+    - pattern: '\bdepartment of\b'
+      label: "your department"
+    - pattern: 'universit|polytechnic|college|institute'
+      label: "your institution"
+    - pattern: '(january|february|march|april|may|june|july|august|september|october|november|december)\s*,?\s*(19|20)\d\d'
+      label: "the month and year of submission"
 
 structure:
   title_page_required: true
   enforce_order: true
-  chapter_label: words      # CHAPTER ONE
+  chapter_label: words          # CHAPTER ONE
   chapter_titles_strict: false
   section_new_page: true
   preliminaries:
     - id: declaration
       title: Declaration
-      required: false
+      body_text: true
+      text: {line_spacing: 1.5}
     - id: certification
       title: Certification
       aliases: [Approval Page, Approval, Certificate]
+      body_text: true
+      text: {line_spacing: 1.5}
+      must_include: [External Examiner]
+      must_not_include: [External Supervisor]
     - id: dedication
       title: Dedication
+      body_text: true
+      text: {line_spacing: 1.5}
     - id: acknowledgements
-      title: Acknowledgements
-      aliases: [Acknowledgement, Acknowledgments, Acknowledgment]
+      title: Acknowledgement
+      aliases: [Acknowledgements, Acknowledgments, Acknowledgment]
       body_text: true
-    - id: abstract
-      title: Abstract
-      body_text: true
+      text: {line_spacing: 1.5}
     - id: table_of_contents
       title: Table of Contents
-      aliases: [Contents]
-    - id: list_of_tables
-      title: List of Tables
-      required: false
+      aliases: [Contents, Table of Content]
     - id: list_of_figures
       title: List of Figures
+      required: if_figures
+      alternatives: [list_of_figures_and_tables]
+    - id: list_of_tables
+      title: List of Tables
+      required: if_tables
+      alternatives: [list_of_figures_and_tables]
+    - id: list_of_figures_and_tables
+      title: List of Figures and Tables
+      aliases: [List of Tables and Figures]
       required: false
     - id: list_of_abbreviations
       title: List of Abbreviations
       aliases: [Abbreviations, List of Acronyms, Acronyms]
       required: false
+    - id: abstract
+      title: Abstract
+      body_text: true
+      text: {line_spacing: 1.0}
+      max_paragraphs: 1
   chapters:
     - number: 1
       title: Introduction
+      sections:
+        - number: "1.1"
+          title: Background of the Project
+          aliases: [Background of the Study, Background to the Study, Background to the Project,
+                    Background of Study, Background Information, Background]
+        - number: "1.2"
+          title: Statement of the Problem
+          aliases: [Problem Statement, Statement of Problem]
+        - number: "1.3"
+          title: Aim and Objectives
+          aliases: [Aims and Objectives, Aim and Objective, Objectives of the Study, Objectives of the Project]
+        - number: "1.4"
+          title: Significance of the Project
+          aliases: [Significance of the Study, Significance, Justification of the Study, Justification]
+        - number: "1.5"
+          title: Scope of the Project
+          aliases: [Scope of the Study, Scope and Limitations, Scope and Limitation, Scope]
     - number: 2
       title: Literature Review
       aliases: [Review of Related Literature, Review of Literature]
+      sections:
+        - number: "2.1"
+          title: Review of Relevant Literature
+          aliases: [Review of Related Literature, Conceptual Review, Theoretical Framework, Literature Review]
+        - number: "2.2"
+          title: Review of Related Works
+          aliases: [Related Works, Review of Past Works, Review of Past/Reported Works, Review of Reported Works,
+                    Empirical Review, Review of Existing Systems]
+        - number: "2.3"
+          title: Summary of Literature Review
+          aliases: [Summary, Summary of Related Works, Summary of Reviewed Literature, Research Gap,
+                    Brief Introduction of Proposed Work, Brief Introduction of Work, Proposed Work]
     - number: 3
-      title: Research Methodology
-      aliases: [Methodology, Research Methods, Materials and Methods, Research Design and Methodology]
+      title: Materials and Methods
+      aliases: [Methodology, Research Methodology, Materials and Method, System Analysis and Design,
+                Design and Methodology, Research Methods]
+      sections:
+        - number: "3.1"
+          title: Materials
+          aliases: [Materials and Components, Materials Used, Components, System Requirements]
+        - number: "3.2"
+          title: Methods
+          aliases: [Method, Methodology, System Design, Design Methodology]
     - number: 4
-      title: Data Presentation, Analysis and Interpretation
-      aliases: [Results and Discussion, Data Analysis, Results, Data Analysis and Interpretation, Presentation and Analysis of Data]
+      title: Results and Discussion
+      aliases: [Results and Discussions, Testing and Results, Implementation and Results,
+                System Implementation and Testing, Results]
+      sections:
+        - number: "4.1"
+          title: Results
+          aliases: [Test Results, Testing, System Testing, Implementation]
     - number: 5
-      title: Summary, Conclusion and Recommendations
-      aliases: [Conclusion and Recommendations, Summary and Conclusion, Discussion, Conclusion]
+      title: Conclusion and Recommendation
+      aliases: [Conclusion and Recommendations, "Summary, Conclusion and Recommendations",
+                "Summary, Conclusion and Recommendation", Summary and Conclusion, Conclusion]
+      sections:
+        - number: "5.1"
+          title: Conclusion
+          aliases: [Conclusions, Summary and Conclusion]
+        - number: "5.2"
+          title: Recommendation
+          aliases: [Recommendations, Recommendation for Further Work, Recommendations for Future Work]
   back_matter:
     - id: references
       title: References
       aliases: [Reference, Bibliography, Works Cited]
     - id: appendices
-      title: Appendices
-      aliases: [Appendix]
+      title: Appendix
+      aliases: [Appendices]
       required: false
+      free_format: true
 
 page_numbering:
   preliminaries: lower_roman
@@ -119,12 +220,18 @@ captions:
   figure_position: below
   numbering: by_chapter     # Table 4.1, Figure 2.3
   must_be_referenced: true
+  text:
+    alignment: center
 
 references:
   style: apa7
   order: alphabetical
   hanging_indent: 0.5in
+  text:
+    line_spacing: 1.5
   check_citations: true
+  max_age_years: 4
+  age_severity: suggestion  # tolerated for undergraduates
 
 limits:
   abstract_max_words: 300
@@ -135,8 +242,9 @@ hygiene:
   no_double_spaces: true
 
 toc:
-  automatic: true
-  up_to_date: true
+  automatic: false          # typed contents pages are allowed...
+  up_to_date: true          # ...but must match the headings and numbering
+  lists_match_captions: true
 
 report:
   comments_per_rule: 15

@@ -1,0 +1,38 @@
+# Formatly Standard: postgraduate (MSc, PhD).
+#
+# Same layout as the project; sources older than 4 years are errors, not
+# suggestions, because the leniency for undergraduates does not apply.
+
+name: Formatly Standard (Postgraduate)
+version: 2
+extends: default
+description: >
+  The Formatly Standard layout for dissertations and theses, with strict
+  source recency (last 4 years).
+
+references:
+  max_age_years: 4
+  age_severity: error
+
+title_page:
+  text:
+    font: Times New Roman
+    size: 12
+    bold: true
+    all_caps: true
+    alignment: center
+  must_include:
+    - pattern: '\bby\b'
+      label: "the word “BY” before your name"
+    - pattern: '\b[A-Z]{2,}/[A-Z0-9]{2,}/\d{2,4}/\d{3,}\b|reg(istration)?\.?\s*no|matric'
+      label: "your registration number"
+    - pattern: '\b(dissertation|thesis)\b'
+      label: "that it is a dissertation or thesis"
+    - pattern: '\bsubmitted\b'
+      label: "the statement “submitted to …”"
+    - pattern: '\bdepartment of\b|school of postgraduate|postgraduate school'
+      label: "your department or postgraduate school"
+    - pattern: 'universit|polytechnic|college|institute'
+      label: "your institution"
+    - pattern: '(january|february|march|april|may|june|july|august|september|october|november|december)\s*,?\s*(19|20)\d\d'
+      label: "the month and year of submission"

@@ -22,7 +22,8 @@ _ROMAN = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100}
 CHAPTER_RE = re.compile(r"^\s*chapter\s+([a-z]+|\d+)\b\s*[:.\-–—]?\s*(.*)$", re.I | re.S)
 # "Abstract ........ v" or "Abstract<TAB>v": a line of a typed table of contents
 LISTING_LINE_RE = re.compile(r"(\t|\.{3,}|…|_{3,})\s*[0-9ivxlcIVXLC]+\s*$")
-NUMBERED_HEADING_RE = re.compile(r"^\s*(\d+(?:\.\d+){1,3})\.?\s+(\S.*)$", re.S)
+LISTING_PREFIXES = ("table_of_contents", "list_of")  # section ids whose lines list other headings
+NUMBERED_HEADING_RE =re.compile(r"^\s*(\d+(?:\.\d+){1,3})\.?\s+(\S.*)$", re.S)
 
 
 def roman_to_int(s: str) -> int | None:
@@ -101,6 +102,7 @@ class Outline:
     listing_blocks: set[int] = field(default_factory=set)  # typed TOC / list lines
     toc_field: bool = False
     n_blocks: int = 0
+    free_blocks: set[int] = field(default_factory=set)  # inside appendices and other free-format sections
 
     def hit(self, spec_id: str) -> SectionHit | None:
         return next((h for h in self.hits if h.spec_id == spec_id), None)
@@ -129,7 +131,11 @@ def _is_candidate(model: DocumentModel, b: Block) -> bool:
     if b.in_toc and model.para_format(b).style_name.lower() not in ("toc heading", "contents heading"):
         return False
     text = b.text.strip()
-    if len(text) > 160 or word_count(text) > 22:
+    numbered = NUMBERED_HEADING_RE.match(text)
+    # Numbered headings can be long (e.g. the full title of a reviewed work).
+    max_words, max_chars = (40, 300) if numbered and not text.endswith(".") else (22, 160)
+    words = word_count(numbered.group(2)) if numbered else word_count(text)
+    if len(text) > max_chars or words > max_words:
         return False
     return not LISTING_LINE_RE.search(text)
 
@@ -164,6 +170,29 @@ def build_outline(model: DocumentModel, rules: Rulebook) -> Outline:
 
     hits: list[SectionHit] = []
     title_blocks: set[int] = set()
+
+    # 0. Typed tables of contents and lists come first: their lines
+    #    ("CHAPTER ONE: INTRODUCTION") look exactly like the headings they list.
+    #    A listing runs from its heading to the next preliminary heading or the
+    #    next new page, whichever comes first.
+    tentative: list[tuple[int, str]] = []
+    for b in candidates:
+        if word_count(b.text) > 8:
+            continue
+        spec = next((s for s in st.preliminaries if names_match(b.text, [s.title, *s.aliases])), None)
+        if spec:
+            tentative.append((b.index, spec.id))
+    listing_region: set[int] = set()
+    for pos, (idx, sid) in enumerate(tentative):
+        if not sid.startswith(LISTING_PREFIXES):
+            continue
+        stop = tentative[pos + 1][0] if pos + 1 < len(tentative) else len(blocks)
+        for b in blocks[idx + 1:stop]:
+            if not b.is_empty and model.starts_new_page(b):
+                break
+            listing_region.add(b.index)
+    candidates = [b for b in candidates if b.index not in listing_region]
+    out.listing_blocks |= {i for i in listing_region if blocks[i].kind == "p" and not blocks[i].is_empty}
 
     # 1. Chapters, from "CHAPTER ONE" style labels.
     for b in candidates:
@@ -223,18 +252,23 @@ def build_outline(model: DocumentModel, rules: Rulebook) -> Outline:
 
     # 3. Typed tables of contents and lists of tables / figures.
     for h in out.hits:
-        if h.spec_id in ("table_of_contents", "list_of_tables", "list_of_figures", "list_of_abbreviations"):
+        if h.spec_id.startswith(LISTING_PREFIXES):
             for b in blocks[h.block + 1:h.end]:
                 if b.kind == "p" and not b.is_empty:
                     out.listing_blocks.add(b.index)
 
-    # 4. Headings and their levels.
+    # 4. Headings and their levels (none inside free-format sections such as
+    #    appendices of pasted code).
+    free = [(h.block, h.end) for h in all_hits
+            if (spec := rules.section_spec(h.spec_id)) is not None and spec.free_format]
+    out.free_blocks = {i for start, end in free for i in range(start + 1, end)}
     for h in all_hits:
         out.headings[h.block] = HeadingInfo(h.block, 1, h.heading, "chapter" if h.kind == "chapter" else "section")
         if h.title_block is not None and h.title_block != h.block:
             out.headings[h.title_block] = HeadingInfo(h.title_block, 1, h.title, "chapter")
     for b in candidates:
-        if b.index in out.headings or b.index in out.listing_blocks or b.index < out.title_page_end:
+        if (b.index in out.headings or b.index in out.listing_blocks or b.index < out.title_page_end
+                or b.index in out.free_blocks):
             continue
         text = b.text.strip()
         level, source = style_level(model, b)

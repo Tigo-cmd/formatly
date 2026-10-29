@@ -38,13 +38,14 @@ def check_page(ctx: Context) -> None:
 
         if rules.size and w and h:
             ctx.log.checked_rule("page.size")
-            pw, ph = PAPER[rules.size]
+            allowed = rules.size if isinstance(rules.size, list) else [rules.size]
             short, long_ = sorted((w, h))
-            if abs(short - pw) > PAPER_TOLERANCE or abs(long_ - ph) > PAPER_TOLERANCE:
+            if not any(abs(short - PAPER[s][0]) <= PAPER_TOLERANCE and abs(long_ - PAPER[s][1]) <= PAPER_TOLERANCE
+                       for s in allowed):
                 ctx.log.add(Issue(
                     "page.size", "error",
-                    f"Paper size is {_paper_name(w, h)}{where}. Required: {rules.size}.",
-                    f"Layout > Size > {rules.size}.", anchor, fixable=True))
+                    f"Paper size is {_paper_name(w, h)}{where}. Required: {' or '.join(allowed)}.",
+                    f"Layout > Size > {allowed[0]}.", anchor, fixable=True))
 
         if rules.orientation and w and h:
             ctx.log.checked_rule("page.orientation")

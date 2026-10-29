@@ -20,11 +20,11 @@ from docx.text.paragraph import Paragraph
 from docx.text.run import Run
 from lxml import etree
 
-from .checks.base import Context
+from .checks.base import Context, first_alignment
 from .checks.page import PAPER
-from .checks.references import parse_reference, reference_blocks, sort_key
+from .checks.references import parse_reference, reference_entries, sort_key
 from .checks.structure import page_number_location
-from .docmodel import Block, text_runs
+from .docmodel import Block, iter_flow, text_runs
 from .issues import Issue
 from .outline import CHAPTER_RE
 from .rulebook import TextRules
@@ -62,7 +62,7 @@ def apply_text_rules(ctx: Context, b: Block, want: TextRules, aspects: set[str])
             run.font.all_caps = True
     pf = p.paragraph_format
     if "alignment" in aspects and want.alignment:
-        pf.alignment = ALIGN[want.alignment]
+        pf.alignment = ALIGN[first_alignment(want.alignment)]
     if "line_spacing" in aspects and want.line_spacing:
         ls = want.line_spacing
         if ls.rule == "multiple":
@@ -141,11 +141,15 @@ def _page_field_runs(font: str | None, size: float | None) -> list:
 def _fix_page(ctx: Context, issues: list[Issue]) -> int:
     rules = ctx.rules.page
     sections = ctx.model.sections
+    wrong = {i.rule for i in issues}
     for i, sec in enumerate(sections):
         landscape = sec.page_width and sec.page_height and sec.page_width > sec.page_height
         keep_landscape = landscape and rules.allow_landscape_sections and i > 0
-        if rules.size:
-            w, h = PAPER[rules.size]
+        if rules.size and wrong & {"page.size", "page.orientation"}:
+            if "page.size" in wrong:
+                w, h = PAPER[rules.size[0] if isinstance(rules.size, list) else rules.size]
+            else:  # orientation only: keep this paper, just turn it
+                w, h = sorted((round(sec.page_width / 635), round(sec.page_height / 635)))
             if keep_landscape or (rules.orientation == "landscape"):
                 w, h = h, w
             sec.page_width, sec.page_height = Twips(w), Twips(h)
@@ -156,7 +160,7 @@ def _fix_page(ctx: Context, issues: list[Issue]) -> int:
                     pgsz.set(orient, "landscape")
                 else:
                     pgsz.attrib.pop(orient, None)
-        if rules.margins:
+        if rules.margins and "page.margins" in wrong:
             m = rules.margins
             top, bottom, left, right = m.top, m.bottom, m.left, m.right
             if keep_landscape:
@@ -184,6 +188,11 @@ def _fix_text(ctx: Context, issues: list[Issue], want_for) -> int:
 def _fix_new_page(ctx: Context, issues: list[Issue]) -> int:
     for i in issues:
         Paragraph(ctx.blocks[i.block].el, None).paragraph_format.page_break_before = True
+        # Empty lines that were pushing the heading down would now leave a blank gap.
+        if i.data.get("blank_lines", 0) >= 3:
+            for prev in ctx.blocks[i.block - i.data["blank_lines"]:i.block]:
+                if prev.is_empty and not prev.ends_section and prev.el.getparent() is not None:
+                    prev.el.getparent().remove(prev.el)
     return len(issues)
 
 
@@ -226,9 +235,18 @@ def _fix_hygiene(ctx: Context, issues: list[Issue]) -> int:
                 rpr._remove_color()
                 rpr._add_color().set(qn("w:val"), "auto")
         elif i.rule == "hygiene.double_space":
-            for t in b.el.iter(qn("w:t")):
-                if t.text:
-                    t.text = re.sub(r"(?<=\S) {2,}(?=\S)", " ", t.text)
+            prev_space = False  # the text before ended with a space (it may be in another run)
+            for t in iter_flow(b.el, (qn("w:t"),)):
+                text = re.sub(r"(?<=\S) {2,}(?=\S|$)", " ", t.text or "")
+                if prev_space and text.startswith(" "):
+                    text = text.lstrip(" ")
+                elif text.startswith("  ") and not prev_space:
+                    text = " " + text.lstrip(" ")
+                if text != (t.text or ""):
+                    t.text = text
+                    t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+                if text:
+                    prev_space = text.endswith(" ")
     return len(issues)
 
 
@@ -246,10 +264,85 @@ def _move_elements_sorted(els: list, keyfunc) -> None:
         holder.getparent().remove(holder)
 
 
+def _space_run(like) -> etree._Element:
+    r = OxmlElement("w:r")
+    if like is not None and like.find(qn("w:rPr")) is not None:
+        r.append(copy.deepcopy(like.find(qn("w:rPr"))))
+    t = OxmlElement("w:t")
+    t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    t.text = " "
+    r.append(t)
+    return r
+
+
+def _tabs_to_spaces(p_el) -> None:
+    """Tabs and line breaks used to arrange lines become plain spaces."""
+    for node in list(iter_flow(p_el, (qn("w:tab"), qn("w:br"), qn("w:cr")))):
+        if node.tag == qn("w:br") and node.get(qn("w:type")) not in (None, "textWrapping"):
+            continue  # page and column breaks stay
+        if node.getparent().tag == qn("w:r"):
+            t = OxmlElement("w:t")
+            t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+            t.text = " "
+            node.addprevious(t)
+            node.getparent().remove(node)
+
+
+def collapse_spaces(p_el) -> None:
+    """No spaces at the start, one space between words, also across runs."""
+    prev_space = True  # the start of the paragraph counts as a space
+    for t in iter_flow(p_el, (qn("w:t"),)):
+        text = re.sub(r" {2,}", " ", t.text or "")
+        if prev_space:
+            text = text.lstrip(" ")
+        if text != (t.text or ""):
+            t.text = text
+            t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        if text:
+            prev_space = text.endswith(" ")
+
+
+def _trim(p_el, leading: bool) -> None:
+    texts = [t for t in iter_flow(p_el, (qn("w:t"),))]
+    for t in (texts if leading else reversed(texts)):
+        new = (t.text or "").lstrip() if leading else (t.text or "").rstrip()
+        t.text = new
+        if new:
+            break
+
+
+def merge_paragraphs(first_el, others: list) -> None:
+    """Join paragraphs into the first, one space between them. Words are unchanged."""
+    for el in others:
+        _tabs_to_spaces(el)
+        _trim(first_el, leading=False)
+        _trim(el, leading=True)
+        runs = first_el.findall(qn("w:r"))
+        first_el.append(_space_run(runs[-1] if runs else None))
+        for child in [c for c in el if c.tag != qn("w:pPr")]:
+            first_el.append(child)
+        el.getparent().remove(el)
+    _trim(first_el, leading=False)
+
+
 def _fix_references(ctx: Context, issues: list[Issue]) -> int:
     fixed = 0
+    splits = [i for i in issues if i.rule == "references.split"]
+    for i in [i for i in issues if i.rule == "references.layout"]:
+        for k in i.data["blocks"]:
+            _tabs_to_spaces(ctx.blocks[k].el)
+        fixed += 1
+    for i in splits:
+        els = [ctx.blocks[k].el for k in i.data["blocks"]]
+        merge_paragraphs(els[0], els[1:])
+        fixed += 1
+    for i in [i for i in issues if i.rule in ("references.layout", "references.split")]:
+        el = ctx.blocks[i.data["blocks"][0]].el
+        if el.getparent() is not None:
+            collapse_spaces(el)
     want = ctx.rules.reference_text()
-    text_issues = [i for i in issues if i.rule not in ("references.order", "references.hanging_indent")]
+    text_issues = [i for i in issues if i.rule not in ("references.order", "references.hanging_indent",
+                                                       "references.split", "references.layout")]
     fixed += _fix_text(ctx, text_issues, lambda _idx: want)
     hanging = ctx.rules.references.hanging_indent
     for i in issues:
@@ -258,11 +351,12 @@ def _fix_references(ctx: Context, issues: list[Issue]) -> int:
             pf.left_indent = Twips(hanging)
             pf.first_line_indent = Twips(-hanging)
             fixed += 1
-    if any(i.rule == "references.order" for i in issues):
-        entries = reference_blocks(ctx)
-        if entries and not any(b.ends_section for b in entries):
-            texts = {id(b.el): sort_key(parse_reference(b).text) for b in entries}
-            _move_elements_sorted([b.el for b in entries], lambda el: texts[id(el)])
+    # Sorting moves whole references; after joining split ones, the next pass sorts.
+    if any(i.rule == "references.order" for i in issues) and not splits:
+        entries = reference_entries(ctx)
+        if entries and all(len(e.blocks) == 1 for e in entries) and not any(e.first.ends_section for e in entries):
+            texts = {id(e.first.el): sort_key(parse_reference(e).text) for e in entries}
+            _move_elements_sorted([e.first.el for e in entries], lambda el: texts[id(el)])
             fixed += sum(1 for i in issues if i.rule == "references.order")
     return fixed
 
@@ -490,7 +584,10 @@ def apply_fixes(ctx: Context) -> dict[str, int]:
 
     body = family("body.")
     if body:
-        _fix_text(ctx, body, lambda _idx: ctx.rules.body)
+        def body_want(idx: int):
+            sec = ctx.outline.section_at(idx)
+            return ctx.rules.body_text_for(sec.spec_id if sec else None)
+        _fix_text(ctx, body, body_want)
         record(body)
 
     headings = by_rule.get("headings.format", [])
@@ -503,6 +600,11 @@ def apply_fixes(ctx: Context) -> dict[str, int]:
     if by_rule.get("headings.chapter_label"):
         _fix_chapter_label(ctx, by_rule["headings.chapter_label"])
         record(by_rule["headings.chapter_label"])
+
+    title_page = by_rule.get("structure.title_page_format", [])
+    if title_page and ctx.rules.title_page.text:
+        _fix_text(ctx, title_page, lambda _idx: ctx.rules.title_page.text)
+        record(title_page)
 
     hygiene = family("hygiene.")
     if hygiene:

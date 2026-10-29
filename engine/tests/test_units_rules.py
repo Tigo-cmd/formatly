@@ -24,8 +24,8 @@ def test_line_spacing(value, rule, amount):
     assert (ls.rule, ls.value) == (rule, amount)
 
 
-def test_default_rulebook_loads():
-    rb = load_rulebook()
+def test_generic_rulebook_loads():
+    rb = load_rulebook("generic")
     assert rb.body.font == "Times New Roman"
     assert rb.page.margins.left == 2160
     assert [c.number for c in rb.structure.chapters] == [1, 2, 3, 4, 5]
@@ -75,6 +75,41 @@ def test_sentence_about_a_chapter_is_not_a_chapter_heading():
     target.insert_paragraph_before("Chapter two reviews related literature.")
     buf = io.BytesIO()
     d.save(buf)
-    result = check(buf.getvalue())
+    result = check(buf.getvalue(), "generic")
     assert [c["number"] for c in result.report["document"]["chapters"]] == [1, 2, 3, 4, 5]
     assert not any(i.rule.startswith("structure.") for i in result.issues)
+
+
+def test_tab_stop_settings_are_not_text():
+    """WPS and Word store tab stops as <w:tab> inside paragraph settings."""
+    import docx
+    from docx.enum.text import WD_TAB_ALIGNMENT
+    from docx.shared import Inches
+
+    from formatly_engine.docmodel import paragraph_text
+
+    d = docx.Document()
+    p = d.add_paragraph("Declaration")
+    p.paragraph_format.tab_stops.add_tab_stop(Inches(6), WD_TAB_ALIGNMENT.RIGHT)
+    assert paragraph_text(p._p) == "Declaration"
+
+
+def test_long_numbered_heading_is_a_heading():
+    import io
+
+    import docx
+
+    from formatly_engine import check
+    from samples import build_standard_project
+
+    d = docx.Document(io.BytesIO(build_standard_project()))
+    target = [p for p in d.paragraphs if p.text.startswith("2.3 ")][-1]  # the body heading, not the contents line
+    long_title = ("2.2.1 CONTROLLING A DRONE WITH HAND GESTURES USING MEDIAPIPE HAND KEYPOINT DETECTION "
+                  "AND A SIMPLE NEURAL NETWORK TO RECOGNISE GESTURES")
+    h = target.insert_paragraph_before(long_title)
+    h.runs[0].bold = True
+    buf = io.BytesIO()
+    d.save(buf)
+    result = check(buf.getvalue())
+    levels = {info.text: info.level for info in result.context.outline.headings.values()}
+    assert levels.get(long_title) == 3
