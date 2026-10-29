@@ -419,9 +419,9 @@ def build_standard_project(
         ("TWO", "LITERATURE REVIEW", [("2.1", "Review of Relevant Literature"), ("2.2", "Review of Related Works"),
                                       ("2.3", "Summary of Literature Review")]),
     ]
+    chapters.append(("THREE", "MATERIALS AND METHODS", [("3.1", "Materials"), ("3.2", "Methods")]))
     if not seminar:
         chapters += [
-            ("THREE", "MATERIALS AND METHODS", [("3.1", "Materials"), ("3.2", "Methods")]),
             ("FOUR", "RESULTS AND DISCUSSION", [("4.1", "Results")]),
             ("FIVE", "CONCLUSION AND RECOMMENDATION", [("5.1", "Conclusion"), ("5.2", "Recommendation")]),
         ]

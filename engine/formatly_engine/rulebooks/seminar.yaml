@@ -1,14 +1,14 @@
 # Formatly Standard: seminar.
 #
 # Same layout as the project, with "Background of the Study" in Chapter One
-# and a seminar title page. A seminar covers Chapters One and Two; the
-# later chapters are optional.
+# and a seminar title page. A seminar has Chapters One, Two and Three
+# (confirmed); Chapters Four and Five are not required.
 
 name: Formatly Standard (Seminar)
 version: 2
 extends: default
 description: >
-  The Formatly Standard layout for seminar reports: Chapters One and Two
+  The Formatly Standard layout for seminar reports: Chapters One to Three
   required, "Background of the Study", seminar title page.
 
 title_page:
@@ -74,7 +74,6 @@ structure:
       title: Materials and Methods
       aliases: [Methodology, Research Methodology, Materials and Method, System Analysis and Design,
                 Design and Methodology, Research Methods]
-      required: false
     - number: 4
       title: Results and Discussion
       aliases: [Results and Discussions, Testing and Results, Implementation and Results, Results]

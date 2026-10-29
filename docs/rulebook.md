@@ -10,7 +10,7 @@ Formatly team and for testing.
 | Name | For |
 | --- | --- |
 | `default` | **Formatly Standard (Project).** Final year projects. Built from the Formatly team's template documents and guidance. |
-| `seminar` | Formatly Standard for seminar reports: Chapters One and Two required, "Background of the Study", seminar title page. |
+| `seminar` | Formatly Standard for seminar reports: Chapters One to Three required, "Background of the Study", seminar title page. |
 | `postgraduate` | Formatly Standard for dissertations and theses: sources older than 4 years are errors. |
 | `generic` | A common Nigerian layout (A4, 1.5 in binding margin, APA 7, first-line indents) for other institutions. |
 

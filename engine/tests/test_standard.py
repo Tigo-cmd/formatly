@@ -15,7 +15,6 @@ def rules_of(result):
 
 
 @pytest.mark.parametrize("variant,rulebook", [({}, "default"), ({"seminar": True}, "seminar"),
-                                              ({"a4": True}, "default"),
                                               ({"report_kind": "DISSERTATION"}, "postgraduate")])
 def test_correct_standard_document_passes(variant, rulebook):
     result = check(build_standard_project(**variant), rulebook)
@@ -100,16 +99,28 @@ def test_postgraduate_treats_old_sources_as_errors():
     assert ages and all(i.severity == "error" for i in ages)
 
 
-def test_seminar_needs_only_two_chapters_and_background_of_the_study():
+def test_seminar_needs_three_chapters_and_background_of_the_study():
     result = check(build_standard_project(seminar=True), "seminar")
     assert result.issues == []
+    assert [c["number"] for c in result.report["document"]["chapters"]] == [1, 2, 3]
     # A seminar title page must say "seminar".
     project = check(build_standard_project(), "seminar")
     assert "structure.title_page_content" in rules_of(project)
 
 
-def test_letter_and_a4_are_both_accepted_and_fix_keeps_the_paper():
-    result = fix(build_project(even_margins=True), "default")
+def test_paper_must_be_letter():
+    result = check(build_standard_project(a4=True))
+    assert {i.rule for i in result.issues} == {"page.size"}
+    fixed = fix(build_standard_project(a4=True))
+    doc = docx.Document(io.BytesIO(fixed.fixed))
+    assert round(doc.sections[0].page_width.inches, 2) == 8.5
+    assert fixed.after.issues == []
+
+
+def test_a_list_of_paper_sizes_accepts_any_and_fix_keeps_the_paper():
+    from formatly_engine import rulebook_from_dict
+    rb = rulebook_from_dict({"name": "x", "extends": "generic", "page": {"size": ["Letter", "A4"]}})
+    result = fix(build_project(even_margins=True), rb)
     doc = docx.Document(io.BytesIO(result.fixed))
     assert round(doc.sections[0].page_width.mm) == 210  # A4 stays A4
 

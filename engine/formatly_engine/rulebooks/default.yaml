@@ -5,7 +5,8 @@
 #   - preliminary order: title page, declaration, certification, dedication,
 #     acknowledgement, table of contents, list of figures and tables, abstract
 #   - the table of contents and the lists must match the numbering in the body
-#   - the abstract is one paragraph, single spaced
+#   - the abstract is one paragraph, single spaced (confirmed)
+#   - US Letter paper only (confirmed)
 #   - the certification page is signed by the examiner, not a "supervisor"
 #   - in-text citations must match the reference list
 #   - sources should be from the last 3 to 4 years (older is tolerated for
@@ -24,7 +25,7 @@ description: >
   chapters with required sections, APA 7 references with recent sources.
 
 page:
-  size: [Letter, A4]        # the templates use Letter; A4 is also accepted
+  size: Letter
   orientation: portrait
   allow_landscape_sections: true
   margins:

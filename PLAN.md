@@ -209,9 +209,8 @@ formatly/
 ## 12. Open items
 
 - Default rulebook: the Formatly Standard (`default`, `seminar`,
-  `postgraduate`) is built from the team's templates. Open questions: abstract
-  spacing (single assumed), Letter vs A4 (both accepted), which chapters a
-  seminar requires (One and Two assumed).
+  `postgraduate`) is built from the team's templates. Confirmed: single-spaced
+  abstract, US Letter only, seminars have Chapters One to Three.
 - Check that the name, domain and Play Store listing for "Formatly" are
   available.
 - More real sample works (anonymised) for testing.
