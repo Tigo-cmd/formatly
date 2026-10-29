@@ -1,0 +1,144 @@
+# Formatly default rulebook. TEMPORARY.
+#
+# Used when the user gives no guideline, and as the fallback for anything
+# their guideline does not mention. The Formatly team will replace this with
+# the official default. It follows common practice for project work, theses
+# and dissertations in Nigerian institutions, with APA 7 references.
+
+name: Formatly Standard (temporary)
+version: 1
+description: >
+  A4, Times New Roman 12 pt, double spacing, 1.5 in binding margin, APA 7.
+  Preliminary pages in roman numerals, five chapters, references, appendices.
+
+page:
+  size: A4
+  orientation: portrait
+  allow_landscape_sections: true
+  margins:
+    top: 1in
+    bottom: 1in
+    left: 1.5in   # binding side
+    right: 1in
+
+body:
+  font: Times New Roman
+  size: 12
+  line_spacing: 2.0
+  space_before: 0pt
+  space_after: 0pt
+  alignment: justify
+  first_line_indent: 0.5in
+
+headings:
+  - level: 1            # chapter labels and titles, main section titles
+    font: Times New Roman
+    size: 12
+    bold: true
+    all_caps: true
+    alignment: center
+    new_page: true
+  - level: 2            # 1.1 Background to the Study
+    font: Times New Roman
+    size: 12
+    bold: true
+    alignment: left
+  - level: 3            # 1.1.1 ...
+    font: Times New Roman
+    size: 12
+    bold: true
+    alignment: left
+
+structure:
+  title_page_required: true
+  enforce_order: true
+  chapter_label: words      # CHAPTER ONE
+  chapter_titles_strict: false
+  section_new_page: true
+  preliminaries:
+    - id: declaration
+      title: Declaration
+      required: false
+    - id: certification
+      title: Certification
+      aliases: [Approval Page, Approval, Certificate]
+    - id: dedication
+      title: Dedication
+    - id: acknowledgements
+      title: Acknowledgements
+      aliases: [Acknowledgement, Acknowledgments, Acknowledgment]
+      body_text: true
+    - id: abstract
+      title: Abstract
+      body_text: true
+    - id: table_of_contents
+      title: Table of Contents
+      aliases: [Contents]
+    - id: list_of_tables
+      title: List of Tables
+      required: false
+    - id: list_of_figures
+      title: List of Figures
+      required: false
+    - id: list_of_abbreviations
+      title: List of Abbreviations
+      aliases: [Abbreviations, List of Acronyms, Acronyms]
+      required: false
+  chapters:
+    - number: 1
+      title: Introduction
+    - number: 2
+      title: Literature Review
+      aliases: [Review of Related Literature, Review of Literature]
+    - number: 3
+      title: Research Methodology
+      aliases: [Methodology, Research Methods, Materials and Methods, Research Design and Methodology]
+    - number: 4
+      title: Data Presentation, Analysis and Interpretation
+      aliases: [Results and Discussion, Data Analysis, Results, Data Analysis and Interpretation, Presentation and Analysis of Data]
+    - number: 5
+      title: Summary, Conclusion and Recommendations
+      aliases: [Conclusion and Recommendations, Summary and Conclusion, Discussion, Conclusion]
+  back_matter:
+    - id: references
+      title: References
+      aliases: [Reference, Bibliography, Works Cited]
+    - id: appendices
+      title: Appendices
+      aliases: [Appendix]
+      required: false
+
+page_numbering:
+  preliminaries: lower_roman
+  main: decimal
+  main_starts_at: 1
+  position: bottom_center
+
+captions:
+  table_position: above
+  figure_position: below
+  numbering: by_chapter     # Table 4.1, Figure 2.3
+  must_be_referenced: true
+
+references:
+  style: apa7
+  order: alphabetical
+  hanging_indent: 0.5in
+  check_citations: true
+
+limits:
+  abstract_max_words: 300
+
+hygiene:
+  no_highlight: true
+  no_coloured_text: true
+  no_double_spaces: true
+
+toc:
+  automatic: true
+  up_to_date: true
+
+report:
+  comments_per_rule: 15
+  comment_author: Formatly
+  comment_initials: FM
