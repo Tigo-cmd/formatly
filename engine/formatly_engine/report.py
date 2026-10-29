@@ -60,5 +60,13 @@ def build_report(ctx: Context) -> dict:
             "headings": len(outline.headings),
             "captions": len(ctx.captions),
         },
-        "issues": [i.to_dict() for i in issues],
+        "issues": [_with_excerpt(ctx, i) for i in issues],
     }
+
+
+def _with_excerpt(ctx: Context, issue) -> dict:
+    """The issue plus the start of the text it points at, so a report can show where it is."""
+    d = issue.to_dict()
+    text = ctx.blocks[issue.block].text.strip() if issue.block is not None else ""
+    d["excerpt"] = (text[:117] + "…") if len(text) > 120 else text
+    return d

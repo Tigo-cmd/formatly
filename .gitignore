@@ -6,3 +6,7 @@ __pycache__/
 build/
 dist/
 /out/
+storage/
+*.db
+node_modules/
+app/dist/

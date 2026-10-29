@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "formatly-server"
+version = "0.1.0"
+description = "Formatly API: accounts, uploads, rulebooks, checks and auto-fix."
+requires-python = ">=3.10"
+dependencies = [
+  "formatly-engine",
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
+  "sqlalchemy>=2.0",
+  "python-multipart>=0.0.9",
+  "PyJWT>=2.8",
+  "pypdf>=4",
+  "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+formatly-server = "formatly_server.main:run"
+
+[tool.setuptools.packages.find]
+include = ["formatly_server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
