@@ -10,3 +10,4 @@ storage/
 *.db
 node_modules/
 app/dist/
+app/dist-preview/

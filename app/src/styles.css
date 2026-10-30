@@ -59,6 +59,28 @@
     color-scheme: dark;
   }
 }
+/* The same dark palette when the viewer chooses dark explicitly. */
+:root[data-theme="dark"] {
+  --desk: #11171f;
+  --paper: #1a222c;
+  --ink: #e6eaf0;
+  --ink-soft: #b3bcc8;
+  --ink-faint: #8790a0;
+  --rule: #2e3946;
+  --binding: #7fb3d1;
+  --binding-hover: #a3cbe2;
+  --on-binding: #0e1a22;
+  --pen-red: #f07a7a;
+  --pen-red-wash: #3a1f22;
+  --pen-amber: #e3b25f;
+  --pen-amber-wash: #3a2f1c;
+  --pen-green: #79c79a;
+  --pen-green-wash: #1c3227;
+  --focus: #8fb5ff;
+  --shadow-page: 0 1px 2px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -82,6 +104,11 @@ p { margin: 0; }
 .small { font-size: var(--step--1); }
 
 /* ---------- shell ---------- */
+
+.preview-note {
+  margin: 0; padding: 8px 16px; text-align: center; font-size: var(--step--1);
+  background: var(--pen-amber-wash); color: var(--ink); border-bottom: 1px solid var(--rule);
+}
 
 .bar {
   background: var(--binding);

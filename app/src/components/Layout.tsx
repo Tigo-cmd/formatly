@@ -1,4 +1,6 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
+import { isPreview } from "../api";
+import icon from "../assets/icon.svg";
 import { useAuth } from "../auth";
 
 export function Layout() {
@@ -8,7 +10,7 @@ export function Layout() {
       <header className="bar">
         <div className="bar-inner">
           <Link to={user ? "/documents" : "/"} className="wordmark" aria-label="Formatly home">
-            <img src="/icon.svg" alt="" width={28} height={28} />
+            <img src={icon} alt="" width={28} height={28} />
             <span>Formatly</span>
           </Link>
           {user ? (
@@ -29,6 +31,11 @@ export function Layout() {
           )}
         </div>
       </header>
+      {isPreview && (
+        <p className="preview-note">
+          Preview with sample results. Any file you choose stays in your browser and shows a sample project’s report.
+        </p>
+      )}
       <Outlet />
     </>
   );

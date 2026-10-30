@@ -28,7 +28,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health() -> dict:
         return {"ok": True}
 
+    if (settings.web_dir / "index.html").exists():
+        _serve_website(app, settings.web_dir)
     return app
+
+
+def _serve_website(app: FastAPI, web_dir) -> None:
+    """Deliver the built website. Unknown paths get index.html so the app's own
+    pages (/documents/abc) work when opened directly or refreshed."""
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+
+    root = web_dir.resolve()
+    index = root / "index.html"
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def website(path: str):
+        if path.startswith("api/"):
+            raise HTTPException(404, "Not found.")
+        target = (root / path).resolve()
+        if path and target.is_file() and target.is_relative_to(root):
+            cache = "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache"
+            return FileResponse(target, headers={"Cache-Control": cache})
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
 def _reader(settings: Settings):

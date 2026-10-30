@@ -17,13 +17,32 @@ The full product plan is in [PLAN.md](PLAN.md).
 | [`server/`](server/): accounts, uploads, rulebooks and library, versions, credits, AI guideline reading | Working (payments: Phase 3) |
 | [`app/`](app/): the website | Working (Android and desktop: Phase 5) |
 
-## Run it locally
+## Run it on your computer
+
+**With Docker** (easiest): install Docker Desktop, then in this folder:
 
 ```sh
-pip install -e "engine[dev]" -e "server[dev]"
-formatly-server                     # the API on :8000
-cd app && npm install && npm run dev  # the website on :5173
+docker compose up --build
 ```
+
+Open http://localhost:8000, create an account and upload a `.docx`. Accounts and
+documents are kept between restarts. To let Formatly read guidelines with AI,
+start it with your key: `ANTHROPIC_API_KEY=sk-ant-... docker compose up --build`.
+
+**Without Docker** (Python 3.10+ and Node 22):
+
+```sh
+pip install -e engine -e server
+cd app && npm install && npm run build && cd ..
+formatly-server                     # website and API on http://localhost:8000
+```
+
+While working on the website, run `npm run dev` in `app/` as well and open
+http://localhost:5173 (it reloads on every change).
+
+**Preview with sample data** (no server): `npm run build:preview` in `app/`
+writes `dist-preview/formatly-preview.html`, the whole website in one file with
+results from the real engine on a sample project.
 
 ## Try the engine on its own
 

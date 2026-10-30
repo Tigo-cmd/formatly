@@ -1,4 +1,5 @@
 // Talks to the Formatly server. Types mirror server/formatly_server.
+import { demoApi, demoDownload, isPreview } from "@demo";
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
 const TOKEN_KEY = "formatly.token";
@@ -103,7 +104,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 const json = (data: unknown) => JSON.stringify(data);
 
-export const api = {
+const realApi = {
   register: (email: string, password: string, name: string) =>
     request<{ token: string; user: User }>("/auth/register", { method: "POST", body: json({ email, password, name }) }),
   login: (email: string, password: string) =>
@@ -157,8 +158,13 @@ export const api = {
   balance: () => request<Balance>("/billing"),
 };
 
+/** In the preview build ("npm run build:preview") a stand-in replaces the server. */
+export const api: typeof realApi = (demoApi as unknown as typeof realApi | null) ?? realApi;
+export { isPreview };
+
 /** Download a file that needs the sign-in token (a plain link cannot send it). */
 export async function download(versionId: string, kind: "commented" | "original", fallbackName: string) {
+  if (demoDownload) return demoDownload();
   const t = token.get();
   const res = await fetch(`${BASE}/versions/${versionId}/download?kind=${kind}`, {
     headers: t ? { Authorization: `Bearer ${t}` } : {},

@@ -176,3 +176,22 @@ def test_delete_removes_files(client, auth, settings):
     assert client.delete(f"/api/documents/{doc['id']}", headers=auth).status_code == 204
     assert list((settings.storage_dir).rglob("*.*")) == []
     assert client.get(f"/api/documents/{doc['id']}", headers=auth).status_code == 404
+
+
+def test_server_delivers_the_website(tmp_path, settings):
+    from fastapi.testclient import TestClient
+
+    from formatly_server.main import create_app
+
+    web = tmp_path / "web"
+    (web / "assets").mkdir(parents=True)
+    (web / "index.html").write_text("<!doctype html><title>Formatly</title>")
+    (web / "assets" / "app.js").write_text("console.log(1)")
+    settings.web_dir = web
+    c = TestClient(create_app(settings))
+    assert "Formatly" in c.get("/").text
+    assert "Formatly" in c.get("/documents/abc").text  # the app's own pages
+    assert c.get("/assets/app.js").headers["cache-control"].startswith("public")
+    assert c.get("/api/nope").status_code == 404
+    assert c.get("/api/health").json() == {"ok": True}
+    assert "Formatly" in c.get("/../../etc/passwd").text  # never a file outside the website

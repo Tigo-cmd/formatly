@@ -1,0 +1,16 @@
+services:
+  formatly:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Change this to any long random text and keep it: it signs logins.
+      FORMATLY_SECRET_KEY: ${FORMATLY_SECRET_KEY:-change-me-to-a-long-random-secret-0123456789}
+      FORMATLY_CORS_ORIGINS: http://localhost:8000
+      # Optional: lets Formatly read guidelines with AI.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - formatly-data:/data
+
+volumes:
+  formatly-data:

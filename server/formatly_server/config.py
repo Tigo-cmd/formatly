@@ -26,6 +26,9 @@ class Settings:
     fix_cost: int = field(default_factory=lambda: int(_env("FIX_COST", "1")))
     anthropic_api_key: str = field(default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY", ""))
     ai_model: str = field(default_factory=lambda: _env("AI_MODEL", "claude-opus-5-5"))
+    # The built website (app/dist). When it exists, the server delivers it too: one address for everything.
+    web_dir: Path = field(default_factory=lambda: Path(_env(
+        "WEB_DIR", str(Path(__file__).resolve().parents[2] / "app" / "dist"))))
     admin_emails: list[str] = field(default_factory=lambda: [
         e.strip().lower() for e in _env("ADMIN_EMAILS", "").split(",") if e.strip()])
 
